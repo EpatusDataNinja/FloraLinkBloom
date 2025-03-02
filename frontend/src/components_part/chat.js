@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Image from './user.png';
+import Title from "./TitleCard";
+import LoadingSpinner from './loading';
 const fetchUsers = async (token, role) => {
-  const response = await fetch('http://localhost:7000/api/v1/users', {
+  const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/users`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -19,7 +21,7 @@ const fetchUsers = async (token, role) => {
 };
 
 const fetchMessages = async (token, receiverId) => {
-  const response = await fetch(`http://localhost:7000/api/v1/message/${receiverId}`, {
+  const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/message/${receiverId}`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -32,7 +34,7 @@ const fetchMessages = async (token, receiverId) => {
 };
 
 const sendMessage = async (token, receiverId, message) => {
-  const response = await fetch(`http://localhost:7000/api/v1/message/add/${receiverId}`, {
+  const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/message/add/${receiverId}`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -110,9 +112,10 @@ const Chat = () => {
       <div className="row">
         {/* User List */}
         <div className="col-md-3">
-          <h2>User List</h2>
+          
+          <Title title={'List of users'}/>
           {loading ? (
-            <p>Loading users...</p>
+            <LoadingSpinner/>
           ) : (
             users.length > 0 ? (
               <ul className="list-group">
