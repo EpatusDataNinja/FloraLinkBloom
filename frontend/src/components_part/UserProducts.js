@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Container, Row, Col, Card, Spinner, Badge, Pagination } from 'react-bootstrap';
 import { FaPhone, FaEnvelope, FaMapMarkerAlt, FaShoppingCart, FaUser } from 'react-icons/fa';
-
+import Image from './user.png';
 const UserProducts = () => {
   const { userId } = useParams();
   const [userProducts, setUserProducts] = useState([]);
@@ -61,7 +61,7 @@ const UserProducts = () => {
         <Card className="mb-4 shadow-lg border-0 rounded p-3">
           <Card.Body className="d-flex align-items-center">
             <img
-              src={owner.image}
+              src={owner.image|| Image }
               alt={owner.firstname}
               className="rounded-circle me-3 border"
               width="80"
