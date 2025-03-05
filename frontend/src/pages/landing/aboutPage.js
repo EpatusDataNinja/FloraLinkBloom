@@ -1,43 +1,32 @@
 import React, { useState } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
-import { Button, Offcanvas } from "react-bootstrap";
-
-import Header from "../../components_part/header";
-import Sidebar from "../../components_part/Sidebar_visitors"; // Import Sidebar Component
-import Footer from "../../components_part/Footer";
 import UserHeader from "../../components_part/user_header";
 import About from "./Accounts_Auto/about";
-const HomePage = () => {
+import Footer from "../../components_part/Footer";
+
+const AboutPage = () => {
   const [show, setShow] = useState(false);
 
   return (
-    <div className="dashboard" style={{ backgroundColor: "whitesmoke" }}>
-      {/* <Header setShow={setShow} /> */}
+    <div className="page-container">
       <UserHeader setShow={setShow} />
+      <main className="main-content">
+        <About />
+        <Footer />
+      </main>
 
-      <div className="container-fluid">
-        <div className="row">
-          <Sidebar show={show} setShow={setShow} />
-          <main className="col-md-9  allcontent">
-            <div className="row">
-              {/* User Product Cards */}
-              <section className="product-section" style={{backgroundImage:'linear-gradient(to right, green, #34DE2B)'}}>
-                <div className="container">
-                  <div className="row">
-                    {/* User 1 */}
-
-                    <About />
-                    
-                    <Footer/>
-                  </div>
-                </div>
-              </section>
-            </div>
-          </main>
-        </div>
-      </div>
+      <style jsx="true">{`
+        .page-container {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #15803d, #84cc16);
+        }
+        .main-content {
+          padding: 2rem 1rem;
+          min-height: calc(100vh - 68px);
+        }
+      `}</style>
     </div>
   );
 };
 
-export default HomePage;
+export default AboutPage;

@@ -206,15 +206,46 @@ export const getallUsers = async () => {
 
 
 export const updateUser = async (id, user) => {
-  const userToUpdate = await users.findOne(
-    { where: { id } },
-    { attributes: { exclude: ["password"] } }
-  );
-  if (userToUpdate) {
-    await users.update(user, { where: { id } });
-    return user;
+  try {
+    console.log('=== Starting User Update Process ===');
+    console.log('User ID to update:', id);
+    console.log('Update data:', JSON.stringify(user, null, 2));
+    
+    // First check if user exists
+    const userToUpdate = await users.findByPk(id);
+    if (!userToUpdate) {
+      console.log('ERROR: User not found with ID:', id);
+      return null;
+    }
+    console.log('Found existing user:', JSON.stringify(userToUpdate.toJSON(), null, 2));
+    
+    // Perform the update
+    console.log('Attempting to update user with data:', JSON.stringify(user, null, 2));
+    const [updatedCount, updatedRows] = await users.update(user, { 
+      where: { id },
+      returning: true // This will return the updated rows
+    });
+    
+    console.log('Update operation result:', {
+      updatedCount,
+      updatedRows: updatedRows ? updatedRows[0].toJSON() : null
+    });
+    
+    if (updatedCount > 0) {
+      // Get the updated user
+      const updatedUser = await users.findByPk(id);
+      console.log('Successfully updated user:', JSON.stringify(updatedUser.toJSON(), null, 2));
+      return updatedUser.toJSON();
+    }
+    
+    console.log('No rows were updated');
+    return null;
+  } catch (error) {
+    console.error('=== Error in updateUser ===');
+    console.error('Error details:', error);
+    console.error('Error stack:', error.stack);
+    throw error;
   }
-  return null;
 };
 
 export const deleteUser = async (id) => {

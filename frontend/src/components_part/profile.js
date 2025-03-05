@@ -5,6 +5,7 @@ import { BiEnvelope, BiPhone, BiMap } from 'react-icons/bi';
 import { Modal, Button } from 'react-bootstrap';
 import { FaInfoCircle } from 'react-icons/fa';
 import LoadingSpinner from './loading';
+import axios from 'axios';
 
 const LandingPage = () => {
     const [formData, setFormData] = useState({
@@ -103,109 +104,196 @@ const LandingPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setLoading(true);
 
         try {
-            setLoading(true);
-            const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/users/update/${ID}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify(formData),
+            // Create form data for the request
+            const formDataToSend = new FormData();
+            
+            // Append text fields that have changed
+            Object.keys(formData).forEach(key => {
+                if (['firstname', 'lastname', 'phone', 'gender'].includes(key) && 
+                    formData[key] !== selectedUser[key] && 
+                    formData[key] !== undefined && 
+                    formData[key] !== null && 
+                    formData[key] !== '') {
+                    formDataToSend.append(key, formData[key]);
+                }
             });
 
-            if (response.ok) {
-                const res = await response.json();
-                toast.success(res.message);
-                const updatedUser = { ...selectedUser, ...formData };
-                localStorage.setItem('user', JSON.stringify(updatedUser));
+            // Append image if it exists
+            if (formDataImage.image) {
+                formDataToSend.append('image', formDataImage.image);
+            }
 
-                await new Promise((resolve) => setTimeout(resolve, 3000));
-                window.location.reload();
+            // If no fields have changed, show message and return
+            if (formDataToSend.keys().length === 0) {
+                toast.info('No changes to update');
+                setLoading(false);
+                return;
+            }
+
+            // Log the form data being sent
+            console.log('Sending update request with data:', {
+                userId: ID,
+                formData: Object.fromEntries(formDataToSend.entries()),
+                hasImage: !!formDataImage.image
+            });
+
+            const response = await axios.put(
+                `${process.env.REACT_APP_BASE_URL}/api/v1/users/update/${ID}`,
+                formDataToSend,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'multipart/form-data',
+                    },
+                    timeout: 10000,
+                }
+            );
+
+            if (response.data.success) {
+                // Get current user data from localStorage
+                const userData = JSON.parse(localStorage.getItem('user'));
+                
+                // Update localStorage with new user data
+                const updatedUserData = {
+                    ...userData,
+                    ...response.data.user
+                };
+                localStorage.setItem('user', JSON.stringify(updatedUserData));
+
+                // Update component state
+                setSelectedUser(updatedUserData);
+                setFormData(updatedUserData);
+                if (response.data.user.image) {
+                    setImage(response.data.user.image);
+                }
+
+                toast.success('Profile updated successfully');
+                setFormDataImage({ image: null });
+                
+                // Close modal if it's open
+                if (showFileUploadModal) {
+                    handleCloseFileUploadModal();
+                }
             } else {
-                const errorData = await response.json();
-                setError(errorData.message);
-                toast.error(errorData.message);
+                throw new Error(response.data.message || 'Failed to update profile');
             }
         } catch (error) {
-            console.error('Error updating user profile', error);
-            setError('Failed to update user profile. Please try again later.');
+            console.error('Profile update error:', {
+                message: error.message,
+                response: error.response?.data,
+                status: error.response?.status
+            });
+
+            if (error.response?.status === 500) {
+                toast.error(error.response.data.message || 'Server error. Please try again later.');
+            } else if (error.response?.data?.message) {
+                toast.error(error.response.data.message);
+            } else if (error.code === 'ECONNABORTED') {
+                toast.error('Request timed out. Please check your connection.');
+            } else {
+                toast.error(error.message || 'Failed to update profile');
+            }
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleSubmit1 = async (e) => {
         e.preventDefault();
 
+        if (formData1.newPassword !== formData1.confirmPassword) {
+            toast.error('Passwords do not match');
+            return;
+        }
+
         try {
             setLoading(true);
+            const token = localStorage.getItem('token');
             const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/users/changePassword`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({
-                    ...formData1,
-                }),
+                body: JSON.stringify(formData1),
             });
 
             if (response.ok) {
                 const res = await response.json();
                 toast.success(res.message);
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-                window.location.reload();
+                handleClosePasswordModal();
+                setFormData1({
+                    oldPassword: '',
+                    newPassword: '',
+                    confirmPassword: ''
+                });
             } else {
                 const errorData = await response.json();
-                setError(errorData.message);
                 toast.error(errorData.message);
             }
         } catch (error) {
             console.error('Error changing password', error);
-            setError('Failed to change password. Please try again later.');
+            toast.error('Failed to change password');
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleSubmitProfile = async (e) => {
         e.preventDefault();
 
+        if (!formDataImage.image) {
+            toast.error('Please select an image');
+            return;
+        }
 
         try {
             setLoading(true);
-
             const formDataUpload = new FormData();
             formDataUpload.append('image', formDataImage.image);
 
+            const response = await axios.put(
+                `${process.env.REACT_APP_BASE_URL}/api/v1/users/update/${ID}`,
+                formDataUpload,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'multipart/form-data',
+                    },
+                    timeout: 10000,
+                }
+            );
 
-            const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/users/update/${ID}`, {
-                method: 'PUT',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-                body: formDataUpload,
-            });
+            if (response.data.success) {
+                toast.success(response.data.message);
 
-            if (response.ok) {
-                const res = await response.json();
-                toast.success(res.message);
-
-                const updatedUser = { ...selectedUser, image: res.user.image };
+                // Update local storage and state with new image
+                const updatedUser = { ...selectedUser, image: response.data.user.image };
                 localStorage.setItem('user', JSON.stringify(updatedUser));
-                console.log(res.user.image)
-
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-                window.location.reload();
+                setFormData(prev => ({ ...prev, image: response.data.user.image }));
+                setImage(response.data.user.image);
+                handleCloseFileUploadModal();
             } else {
-                const errorData = await response.json();
-                setError(errorData.message);
-                toast.error(errorData.message);
+                throw new Error(response.data.message || 'Failed to update profile picture');
             }
         } catch (error) {
-            console.error('Error updating profile picture', error);
-            setError('Failed to update profile picture. Please try again later.');
+            console.error('Error updating profile picture:', error);
+            if (error.response?.status === 500) {
+                toast.error('Server error. Please try again later.');
+            } else if (error.response?.data?.message) {
+                toast.error(error.response.data.message);
+            } else if (error.code === 'ECONNABORTED') {
+                toast.error('Request timed out. Please check your connection.');
+            } else {
+                toast.error(error.message || 'Failed to update profile picture');
+            }
+        } finally {
+            setLoading(false);
         }
     };
-    console.log(formData.image)
 
     return (
         <>
@@ -218,7 +306,7 @@ const LandingPage = () => {
                             <div className="info-container d-flex flex-column align-items-center justify-content-center" style={{ backgroundColor: 'white', fontFamily: 'arial' }}>
                                 <div className="info-itemx d-flex">
                                     <div>
-                                        {formData.image && formData.image !== 'null' ? (
+                                        {image && image !== 'null' ? (
                                             <img src={image} className="img-fluid" alt="" style={{ borderRadius: '10px', marginBottom: '0.5cm', width: '11cm' }} onClick={handleToggleFileUploadModal} />
 
                                         ) : (

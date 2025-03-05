@@ -5,7 +5,7 @@ import { Form, Button, Card, Row, Col, Spinner } from 'react-bootstrap';
 import 'react-toastify/dist/ReactToastify.css';
 import Title from "../../components_part/TitleCard";
 
-const AddProductForm = () => {
+const AddProductForm = ({ editMode, productData }) => {
   const [product, setProduct] = useState({
     name: "",
     categoryID: "",
@@ -18,7 +18,16 @@ const AddProductForm = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Fetch categories on component mount
+  useEffect(() => {
+    if (editMode && productData) {
+      setProduct(prev => ({
+        ...prev,
+        ...productData,
+        image: null // Don't set the image in edit mode unless changed
+      }));
+    }
+  }, [editMode, productData]);
+
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -32,7 +41,7 @@ const AddProductForm = () => {
 
         if (response.ok) {
           const data = await response.json();
-          setCategories(data.data); // Populate categories
+          setCategories(data.data);
         } else {
           toast.error("Failed to fetch categories");
         }
@@ -60,12 +69,16 @@ const AddProductForm = () => {
   };
 
   const validateForm = () => {
-    if (!product.name || !product.categoryID || !product.description || !product.price || !product.quantity || !product.image) {
+    if (!product.name || !product.categoryID || !product.description || !product.price || !product.quantity) {
       toast.error("All fields are required!");
       return false;
     }
-    if (product.price <= 0 || product.quantity <= 0) {
-      toast.error("Price and quantity must be greater than 0");
+    if (product.price <= 0 || product.quantity < 0) {
+      toast.error("Price must be greater than 0 and quantity must be 0 or greater");
+      return false;
+    }
+    if (!editMode && !product.image) {
+      toast.error("Product image is required!");
       return false;
     }
     return true;
@@ -76,7 +89,6 @@ const AddProductForm = () => {
     if (!validateForm()) return;
 
     setLoading(true);
-
     const formData = new FormData();
     formData.append("name", product.name);
     formData.append("categoryID", product.categoryID);
@@ -85,9 +97,13 @@ const AddProductForm = () => {
     formData.append("quantity", product.quantity);
     if (product.image) formData.append("image", product.image);
 
+    const endpoint = editMode 
+      ? `${process.env.REACT_APP_BASE_URL}/api/v1/product/update/${productData.id}`
+      : `${process.env.REACT_APP_BASE_URL}/api/v1/product/add`;
+
     try {
-      const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/product/add`, {
-        method: "POST",
+      const response = await fetch(endpoint, {
+        method: editMode ? "PUT" : "POST",
         headers: {
           "Authorization": `Bearer ${localStorage.getItem("token")}`,
         },
@@ -96,13 +112,27 @@ const AddProductForm = () => {
 
       if (response.ok) {
         const data = await response.json();
-        toast.success("Product added successfully!");
-        // navigate("/dashboard"); // Redirect to the dashboard or another page
+        toast.success(editMode ? "Product updated successfully!" : "Product added successfully!");
+        
+        // Notify other components about the stock update
+        const event = new CustomEvent('productStockUpdate', {
+          detail: {
+            productId: editMode ? productData.id : data.data.id,
+            newQuantity: parseInt(product.quantity),
+            action: editMode ? 'update' : 'add'
+          }
+        });
+        window.dispatchEvent(event);
+
+        // Navigate after a short delay to allow the toast to be seen
+        setTimeout(() => {
+          navigate("/seller/products");
+        }, 2000);
       } else {
-        toast.error("Failed to add product");
+        toast.error(editMode ? "Failed to update product" : "Failed to add product");
       }
     } catch (error) {
-      toast.error("Error adding product");
+      toast.error(editMode ? "Error updating product" : "Error adding product");
     }
 
     setLoading(false);
@@ -112,13 +142,11 @@ const AddProductForm = () => {
     <div className="container mt-5">
       <Card className="p-4">
         <Card.Header className="text-center">
-        
-          <Title title={'Add New Product'}/>
+          <Title title={editMode ? 'Update Product' : 'Add New Product'}/>
         </Card.Header>
         <Card.Body>
           <Form onSubmit={handleSubmit}>
             <Row>
-              {/* Product Name */}
               <Col md={6} className="mb-3">
                 <Form.Group controlId="name">
                   <Form.Label>Product Name</Form.Label>
@@ -133,7 +161,6 @@ const AddProductForm = () => {
                 </Form.Group>
               </Col>
 
-              {/* Category */}
               <Col md={6} className="mb-3">
                 <Form.Group controlId="categoryID">
                   <Form.Label>Category</Form.Label>
@@ -155,7 +182,6 @@ const AddProductForm = () => {
               </Col>
             </Row>
 
-            {/* Product Description */}
             <Form.Group controlId="description" className="mb-3">
               <Form.Label>Description</Form.Label>
               <Form.Control
@@ -168,7 +194,6 @@ const AddProductForm = () => {
               />
             </Form.Group>
 
-            {/* Price */}
             <Row>
               <Col md={6} className="mb-3">
                 <Form.Group controlId="price">
@@ -184,10 +209,9 @@ const AddProductForm = () => {
                 </Form.Group>
               </Col>
 
-              {/* Quantity */}
               <Col md={6} className="mb-3">
                 <Form.Group controlId="quantity">
-                  <Form.Label>Quantity</Form.Label>
+                  <Form.Label>Quantity in Stock</Form.Label>
                   <Form.Control
                     type="number"
                     placeholder="Enter quantity"
@@ -200,19 +224,17 @@ const AddProductForm = () => {
               </Col>
             </Row>
 
-            {/* Image */}
             <Form.Group controlId="image" className="mb-3">
-              <Form.Label>Product Image</Form.Label>
+              <Form.Label>{editMode ? 'Update Product Image (optional)' : 'Product Image'}</Form.Label>
               <Form.Control
                 type="file"
                 name="image"
                 accept="image/*"
                 onChange={handleImageChange}
-                required
+                required={!editMode}
               />
             </Form.Group>
 
-            {/* Submit Button */}
             <Button
               variant="primary"
               type="submit"
@@ -222,14 +244,13 @@ const AddProductForm = () => {
               {loading ? (
                 <Spinner animation="border" size="sm" />
               ) : (
-                "Add Product"
+                editMode ? "Update Product" : "Add Product"
               )}
             </Button>
           </Form>
         </Card.Body>
       </Card>
 
-      {/* Toast Notifications */}
       <ToastContainer />
     </div>
   );

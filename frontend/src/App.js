@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 // Importing components from the landing pages
@@ -8,7 +7,8 @@ import Contact from "./pages/landing/contactPage";
 import NotFound from './pages/landing/Accounts_Auto/notfound';
 import Logout from './pages/landing/Accounts_Auto/logout';
 import Notifications from './pages/AdminDashboard/NotificationPage'
-
+import LoginPage from "./pages/landing/LoginPage";
+import SignupPage from "./pages/landing/SignupPage";
 
 import Forgot from "./pages/landing/Forgot_password";
 import Code_verification from "./pages/landing/Code_Verification";
@@ -16,6 +16,9 @@ import ResetPassword from "./pages/landing/ResetPassword";
 import UserProducts from './pages/landing/User_products';
 import AUTO from './pages/landing/AUTO';
 
+// Import new cart and checkout components
+import CartPage from './pages/BuyerDashboard/CartPage';
+import CheckoutPage from './pages/BuyerDashboard/CheckoutPage';
 
 import AdminDashboard from "./pages/AdminDashboard/UsersPage";
 import SellerDashboard from "./pages/SellerDashboard/homePage";
@@ -56,6 +59,19 @@ function App() {
         <Route path="/" element={<Home />} exact={true} />
         <Route path="/about" element={<About />} exact={true} />
         <Route path="/contact" element={<Contact />} exact={true} />
+        
+        {/* Authentication Routes */}
+        <Route path="/login" element={<LoginPage />} exact={true} />
+        <Route path="/register" element={<SignupPage />} exact={true} />
+        <Route path="/forgot" element={<Forgot />} exact={true} />
+        <Route path="/code_verification/:email" element={<Code_verification/>} exact={true} />
+        <Route path="/resetPassword/:email" element={<ResetPassword/>} exact={true} />
+        <Route path="/logout" element={<Logout />} exact={true} />
+
+        {/* Cart and Checkout Routes */}
+        <Route path="/cart" element={<CartPage />} exact={true} />
+        <Route path="/checkout" element={<CheckoutPage />} exact={true} />
+
         <Route path="*" element={<NotFound />} />
         <Route path="/dashboard/admin" element={<AdminDashboard />} exact={true} />
         <Route path="/dashboard/seller" element={<SellerDashboard />} exact={true} />
@@ -68,9 +84,6 @@ function App() {
         <Route path="/auto" element={<AUTO />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/settings" element={<Profile />} />
-        <Route path="/forgot" element={<Forgot />} exact={true} />
-        <Route path="/code_verification/:email" element={<Code_verification/>} exact={true} />
-        <Route path="/resetPassword/:email" element={<ResetPassword/>} exact={true} />
 
         <Route path="/add_product" element={<AddProduct/>} />
         <Route path="/admin/moderate_product" element={<ModelateProduct/>} />

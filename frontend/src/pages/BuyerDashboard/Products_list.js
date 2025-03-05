@@ -5,6 +5,8 @@ import { FaBox, FaDollarSign, FaCheckCircle, FaShoppingCart, FaTags, FaPhone } f
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Title from "../../components_part/TitleCard";
+import { useNavigate } from "react-router-dom";
+
 const InStockProducts = () => {
   const [inStock, setInStock] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -14,6 +16,7 @@ const InStockProducts = () => {
   const [orderData, setOrderData] = useState({ quantity: 1, phone: "" });
   const [loading, setLoading] = useState(false);
   const [showApprovalPopup, setShowApprovalPopup] = useState(false);
+  const navigate = useNavigate();
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -91,9 +94,54 @@ const InStockProducts = () => {
   // Calculate total amount to be paid
   const totalAmount = selectedProduct ? orderData.quantity * selectedProduct.price : 0;
 
+  const addToCart = (product) => {
+    const existingCart = JSON.parse(localStorage.getItem("cart") || "[]");
+    const existingItem = existingCart.find(item => item.id === product.id);
+
+    if (existingItem) {
+      // Update quantity if item exists
+      const updatedCart = existingCart.map(item => {
+        if (item.id === product.id) {
+          const newQuantity = Math.min(item.quantity + 1, product.quantity);
+          return {
+            ...item,
+            quantity: newQuantity,
+            availableQuantity: product.quantity
+          };
+        }
+        return item;
+      });
+      localStorage.setItem("cart", JSON.stringify(updatedCart));
+    } else {
+      // Add new item
+      const cartItem = {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        image: product.image,
+        quantity: 1,
+        availableQuantity: product.quantity
+      };
+      localStorage.setItem("cart", JSON.stringify([...existingCart, cartItem]));
+    }
+    
+    toast.success("Added to cart!");
+  };
+
+  const viewCart = () => {
+    navigate("/cart");
+  };
+
   return (
     <Container>
-      <Title title={'In-Stock Products'}/>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <Title title={'In-Stock Products'}/>
+        <Button variant="outline-success" onClick={viewCart}>
+          <FaShoppingCart className="me-2" />
+          View Cart
+        </Button>
+      </div>
+
       {loading ? (
         <div className="text-center my-5">
           <Spinner animation="border" variant="primary" />
@@ -111,8 +159,14 @@ const InStockProducts = () => {
                     <Card.Text><FaDollarSign className="text-success" /> Price: <strong>${product.price}</strong></Card.Text>
                     <Card.Text><FaBox className="text-warning" /> Available Stock: {product.quantity}</Card.Text>
                     <Card.Text><FaCheckCircle className="text-success" /> Status: {product.status}</Card.Text>
-                    <Button variant="primary" className="w-100" onClick={() => handleOrderClick(product)}>
-                      <FaShoppingCart /> Order Now
+                    <Button 
+                      variant="success" 
+                      className="w-100"
+                      onClick={() => addToCart(product)}
+                      disabled={product.quantity === 0}
+                    >
+                      <FaShoppingCart className="me-2" />
+                      Add to Cart
                     </Button>
                   </Card.Body>
                 </Card>

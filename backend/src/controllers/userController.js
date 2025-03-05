@@ -420,42 +420,104 @@ export const getOneUser = async (req, res) => {
 
 export const updateOneUser = async (req, res) => {
   try {
-    let image; 
-    if (req.files && req.files.image) {
+    console.log('=== Profile Update Request ===');
+    console.log('User ID:', req.params.id);
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('File:', req.file);
+    console.log('Authenticated user:', req.user);
+
+    // Check if the user exists
+    const existingUser = await getUser(req.params.id);
+    if (!existingUser) {
+      console.log('ERROR: User not found with ID:', req.params.id);
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+    console.log('Found existing user:', JSON.stringify(existingUser, null, 2));
+
+    // Validate the request body
+    const allowedFields = ['firstname', 'lastname', 'phone', 'gender', 'address'];
+    const updateData = {};
+    
+    // Handle text fields from FormData
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined && req.body[field] !== null && req.body[field] !== '') {
+        updateData[field] = req.body[field];
+      }
+    });
+
+    console.log('Fields to update:', JSON.stringify(updateData, null, 2));
+
+    // Handle image upload if present
+    if (req.file) {
       try {
-        image = await imageUploader(req);
-        if (!image || !image.url) {
-          throw new Error('Upload failed or image URL missing');
-        }
-        req.body.image = image.url;
-        console.log(req.body.image)
+        // Create a URL for the uploaded file
+        const fileUrl = `${process.env.BASE_URL || ''}/uploads/${req.file.filename}`;
+        updateData.image = fileUrl;
+        console.log('Image uploaded successfully:', fileUrl);
       } catch (error) {
-        console.error('Error uploading image:', error);
-        // Handle error appropriately
+        console.error('Error handling image:', error);
+        return res.status(500).json({
+          success: false,
+          message: "Error processing image",
+          error: error.message
+        });
       }
     }
-    console.log(req.body.image)
-    const user = await updateUser(req.params.id, req.body);
-    if(req.params.id!=req.user.id){
-      const notification = await createNotification({ userID:req.params.id,title:"your  account has been updated", message:"your account has been edited by admin", type:'account', isRead: false });
-    
+
+    // If no valid fields to update
+    if (Object.keys(updateData).length === 0) {
+      console.log('No fields to update');
+      return res.status(400).json({
+        success: false,
+        message: "No valid fields to update"
+      });
     }
+
+    console.log('Attempting to update user with data:', JSON.stringify(updateData, null, 2));
+
+    // Update user
+    const updatedUser = await updateUser(req.params.id, updateData);
+    if (!updatedUser) {
+      console.log('Failed to update user');
+      return res.status(400).json({
+        success: false,
+        message: "Failed to update user"
+      });
+    }
+
+    console.log('Successfully updated user:', JSON.stringify(updatedUser, null, 2));
+
+    // Create notification if updated by admin
+    if (req.params.id != req.user.id) {
+      await createNotification({
+        userID: req.params.id,
+        title: "Account Updated",
+        message: "Your account has been updated by admin",
+        type: 'account',
+        isRead: false
+      });
+    }
+
     return res.status(200).json({
       success: true,
-      message: "User updated successfully",
-      user,
+      message: "Profile updated successfully",
+      user: updatedUser
     });
   } catch (error) {
-    console.log(error)
+    console.error('=== Error in updateOneUser ===');
+    console.error('Error details:', error);
+    console.error('Error stack:', error.stack);
     return res.status(500).json({
-      message: "Something went wrong",
-      error,
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
-
-
-
 
 export const deleteOneUser = async (req, res) => {
   try {
@@ -769,7 +831,7 @@ export const getSellerOverview = async (req, res) => {
     }, {});
     productStats.totalProducts = products.length;
 
-    // Get orders for the seller’s products
+    // Get orders for the seller's products
     const orders = await Orders.findAll({
       include: [
         {
@@ -957,6 +1019,79 @@ export const getSellerSalesReport = async (req, res) => {
   } catch (error) {
     console.error("[ERROR] Failed to fetch sales report:", error);
     return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const updateProfile = async (req, res) => {
+  try {
+    // Check if the user exists
+    const existingUser = await getUser(req.user.id);
+    if (!existingUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Validate and prepare update data
+    const updateData = {};
+    const allowedFields = ['firstname', 'lastname', 'phone', 'gender'];
+    
+    // Handle text fields
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined && req.body[field] !== null && req.body[field] !== '') {
+        updateData[field] = req.body[field];
+      }
+    });
+
+    // Handle image upload if present
+    if (req.files && req.files.image) {
+      try {
+        const uploadResult = await imageUploader(req);
+        if (uploadResult && uploadResult.url) {
+          updateData.image = uploadResult.url;
+        }
+      } catch (error) {
+        console.error('Image upload error:', error);
+        return res.status(400).json({
+          success: false,
+          message: "Failed to upload image"
+        });
+      }
+    }
+
+    // If no valid fields to update
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid fields to update"
+      });
+    }
+
+    // Update user
+    const updatedUser = await updateUser(req.user.id, updateData);
+    if (!updatedUser) {
+      return res.status(400).json({
+        success: false,
+        message: "Failed to update profile"
+      });
+    }
+
+    // Get fresh user data
+    const user = await getUser(req.user.id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user
+    });
+  } catch (error) {
+    console.error('Profile update error:', error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message
+    });
   }
 };
 
