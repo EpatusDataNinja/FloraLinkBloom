@@ -32,19 +32,20 @@ const Header = ({ setShow }) => {
             if (!token) return;
 
             try {
-                const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/notification/`, {
-                    method: 'GET',
+                const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/notification`, {
                     headers: {
                         'Authorization': `Bearer ${token}`,
-                        'Accept': 'application/json',
+                        'Accept': 'application/json'
                     }
                 });
 
-                if (response.ok) {
-                    const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                if (data.success) {
                     setUnreadCount(data.unreadCount || 0);
-                } else {
-                    console.error('Failed to fetch notifications');
                 }
             } catch (error) {
                 console.error('Error fetching notifications:', error);

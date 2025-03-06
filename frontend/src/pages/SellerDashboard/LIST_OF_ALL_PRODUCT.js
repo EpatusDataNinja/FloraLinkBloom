@@ -4,6 +4,8 @@ import axios from "axios";
 import { ToastContainer, toast } from 'react-toastify';
 import { FaBoxOpen, FaExclamationTriangle } from 'react-icons/fa'; // Add icons for no data
 import Title from "../../components_part/TitleCard";
+import { useNavigate } from "react-router-dom";
+
 const NoDataCard = ({ message, icon }) => (
   <Col className="text-center">
     <Card className="shadow-sm border-0 rounded p-4">
@@ -28,40 +30,46 @@ const ProductPanel = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [newQuantity, setNewQuantity] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   // Fetch In Stock Products
-  const fetchInStock = async () => {
+  const fetchInStockProducts = async () => {
+    setLoading(true);
+    setError(null);
+    
     try {
-      let token = localStorage.getItem("token");
+      const token = localStorage.getItem('token');
       if (!token) {
-        toast.error("No token found! Please login.");
-        return;
+        throw new Error('Authentication token not found');
       }
 
       console.log('Fetching in-stock products...');
-      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/api/v1/product/instock`, {
-        headers: { Authorization: `Bearer ${token}` },
+      console.log('Token:', token);
+      
+      const response = await axios({
+        method: 'GET',
+        url: `${process.env.REACT_APP_BASE_URL}/api/v1/product/instock`,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
       });
 
-      console.log('In-stock response:', response.data);
-      if (response.data && response.data.data) {
-        // Filter and map the products
-        const products = response.data.data.map(product => ({
-          ...product,
-          status: product.status || "In Stock"
-        }));
-        setInStock(products);
+      console.log('Response:', response.data);
+
+      if (response.data.success) {
+        setInStock(response.data.data || []); // Ensure we set an empty array if data is null
       } else {
-        console.error("Invalid response format:", response);
-        toast.error("Error loading in-stock products");
+        throw new Error(response.data.message || 'Failed to fetch in-stock products');
       }
     } catch (error) {
-      console.error("Error fetching in-stock products:", error);
-      if (error.response?.status === 404) {
-        setInStock([]);
-      } else {
-        toast.error(error.response?.data?.message || "Failed to load in-stock products");
-      }
+      console.error('Fetch error details:', error);
+      setError(error.message || 'Failed to fetch in-stock products');
+      toast.error(error.message || 'Failed to fetch in-stock products');
+      setInStock([]); 
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -75,36 +83,26 @@ const ProductPanel = () => {
       }
 
       console.log('Fetching out-of-stock products...');
-      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/api/v1/product`, {
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/api/v1/product/outofstock`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
       console.log('Out-of-stock response:', response.data);
-      if (response.data && response.data.data) {
-        // Filter out-of-stock and rejected products
-        const products = response.data.data
-          .filter(product => product.quantity === 0 || product.status === "rejected")
-          .map(product => ({
-            ...product,
-            status: product.status === "rejected" ? "Rejected" : "Out of Stock"
-          }));
-        setOutOfStock(products);
+      if (response.data.success) {
+        setOutOfStock(response.data.data || []);
       } else {
         console.error("Invalid response format:", response);
         toast.error("Error loading out-of-stock products");
       }
     } catch (error) {
       console.error("Error fetching out-of-stock products:", error);
-      if (error.response?.status === 404) {
-        setOutOfStock([]);
-      } else {
-        toast.error(error.response?.data?.message || "Failed to load out-of-stock products");
-      }
+      setOutOfStock([]);
+      toast.error(error.response?.data?.message || "Failed to load out-of-stock products");
     }
   };
 
   useEffect(() => {
-    fetchInStock();
+    fetchInStockProducts();
     fetchOutOfStock();
   }, []);
 
@@ -167,12 +165,6 @@ const ProductPanel = () => {
       return;
     }
 
-    // Don't allow updating rejected products
-    if (selectedProduct.status === "rejected") {
-      toast.error("Cannot update rejected products");
-      return;
-    }
-
     try {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -181,66 +173,43 @@ const ProductPanel = () => {
       }
 
       setLoading(true);
-      console.log('Selected product details:', selectedProduct);
-      console.log('Updating product:', selectedProduct.id, 'with quantity:', quantity);
 
-      // Create update payload matching backend requirements
+      // Create update payload
       const updatePayload = {
-        name: selectedProduct.name.toUpperCase(),
+        name: selectedProduct.name,
         description: selectedProduct.description,
         price: selectedProduct.price,
         quantity: quantity,
-        categoryID: selectedProduct.categoryID,
-        userID: selectedProduct.userID,
-        image: selectedProduct.image,
-        status: quantity > 0 ? 'In Stock' : 'Out of Stock'
+        categoryID: selectedProduct.category?.id || selectedProduct.categoryID,
+        status: selectedProduct.status, // Keep the existing status
+        image: selectedProduct.image
       };
 
-      console.log('Final update payload:', JSON.stringify(updatePayload, null, 2));
+      const response = await axios({
+        method: 'PUT',
+        url: `${process.env.REACT_APP_BASE_URL}/api/v1/product/update/${selectedProduct.id}`,
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        data: updatePayload
+      });
 
-      const response = await axios.put(
-        `${process.env.REACT_APP_BASE_URL}/api/v1/product/update/${selectedProduct.id}`,
-        updatePayload,
-        { 
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          } 
-        }
-      );
-    
-      console.log('Full update response:', response);
-
-      if (response.data && response.data.success) {
-        toast.success("Stock updated successfully!");
+      if (response.data.success) {
+        toast.success("Stock quantity updated successfully!");
         setShowUpdateModal(false);
         
-        // Dispatch event for stock update
-        const event = new CustomEvent('productStockUpdate', {
-          detail: {
-            productId: selectedProduct.id,
-            newQuantity: quantity,
-            action: 'update'
-          }
-        });
-        window.dispatchEvent(event);
-        
-        // Refresh the lists to get updated data
-        await Promise.all([fetchInStock(), fetchOutOfStock()]);
+        // Refresh both lists to get the latest data
+        await Promise.all([
+          fetchInStockProducts(),
+          fetchOutOfStock()
+        ]);
       } else {
-        throw new Error(response.data?.message || "Update failed");
+        throw new Error(response.data.message || "Update failed");
       }
     } catch (error) {
-      console.error('Full error details:', {
-        url: error.config?.url,
-        method: error.config?.method,
-        headers: error.config?.headers,
-        status: error.response?.status,
-        responseData: error.response?.data,
-        errorMessage: error.message
-      });
-      const errorMessage = error.response?.data?.message || error.message || "Failed to update stock";
-      toast.error(errorMessage);
+      console.error('Update error:', error);
+      toast.error(error.response?.data?.message || error.message || "Failed to update stock");
     } finally {
       setLoading(false);
     }
@@ -276,7 +245,14 @@ const ProductPanel = () => {
   const renderProductCard = (product) => (
     <Col md={4} key={product.id}>
       <Card className="mb-4 shadow-lg">
-        <Card.Img variant="top" src={product.image} />
+        <Card.Img 
+          variant="top" 
+          src={product.image.startsWith('http') ? product.image : `${process.env.REACT_APP_BASE_URL}${product.image}`}
+          onError={(e) => {
+            e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
+          }}
+          alt={product.name}
+        />
         <Card.Body>
           <Card.Title>{product.name}</Card.Title>
           <Card.Text>{product.description}</Card.Text>
@@ -293,19 +269,39 @@ const ProductPanel = () => {
             }>{product.status}</strong>
           </Card.Text>
           <Button 
+            variant="primary" 
+            className="mt-2 me-2"
+            onClick={() => handleEditProduct(product)}
+          >
+            Edit Product
+          </Button>
+          <Button 
             variant="outline-primary" 
             className="mt-2"
             onClick={() => openUpdateModal(product)}
-            disabled={product.status === "rejected" || product.status === "Pending Approval"}
+            disabled={product.status === "rejected"}
           >
-            {product.status === "rejected" ? 'Product Rejected' :
-             product.status === "Pending Approval" ? 'Awaiting Approval' :
-             'Update Stock'}
+            Quick Update Stock
           </Button>
         </Card.Body>
       </Card>
     </Col>
   );
+
+  // Add a retry mechanism
+  const handleRetry = () => {
+    fetchInStockProducts();
+  };
+
+  const handleEditProduct = (product) => {
+    navigate("/dashboard/seller/add-product", { 
+      state: { 
+        editMode: true, 
+        productData: product,
+        returnUrl: window.location.pathname // Store the current path
+      }
+    });
+  };
 
   return (
     <Container>
@@ -314,50 +310,84 @@ const ProductPanel = () => {
       <Tab.Container defaultActiveKey="outofstock">
         <Nav variant="pills" className="mb-4 justify-content-center">
           <Nav.Item>
-            <Nav.Link eventKey="outofstock">Out of Stock</Nav.Link>
+            <Nav.Link eventKey="outofstock">Out of Stock ({outOfStock.length})</Nav.Link>
           </Nav.Item>
           <Nav.Item>
-            <Nav.Link eventKey="instock">In Stock</Nav.Link>
+            <Nav.Link eventKey="instock">In Stock ({inStock.length})</Nav.Link>
           </Nav.Item>
         </Nav>
 
         <Tab.Content>
           {/* Out of Stock Products Panel */}
           <Tab.Pane eventKey="outofstock">
-            <Row>
-              {currentOutOfStock.length > 0 ? (
-                currentOutOfStock.map(renderProductCard)
-              ) : (
-                <NoDataCard message="No out-of-stock products available." icon={<FaBoxOpen />} />
-              )}
-            </Row>
+            {loading ? (
+              <div className="text-center">
+                <Spinner animation="border" />
+              </div>
+            ) : (
+              <>
+                <Row>
+                  {outOfStock.length > 0 ? (
+                    outOfStock.map((product) => renderProductCard(product))
+                  ) : (
+                    <NoDataCard 
+                      message="No out-of-stock products available." 
+                      icon={<FaBoxOpen />} 
+                    />
+                  )}
+                </Row>
 
-            <Pagination className="justify-content-center">
-              {Array.from({ length: outTotalPages }, (_, index) => (
-                <Pagination.Item key={index + 1} active={index + 1 === outCurrentPage} onClick={() => handleOutPageChange(index + 1)}>
-                  {index + 1}
-                </Pagination.Item>
-              ))}
-            </Pagination>
+                {outOfStock.length > 0 && (
+                  <Pagination className="justify-content-center">
+                    {Array.from({ length: Math.ceil(outOfStock.length / productsPerPage) }, (_, index) => (
+                      <Pagination.Item 
+                        key={index + 1} 
+                        active={index + 1 === outCurrentPage} 
+                        onClick={() => handleOutPageChange(index + 1)}
+                      >
+                        {index + 1}
+                      </Pagination.Item>
+                    ))}
+                  </Pagination>
+                )}
+              </>
+            )}
           </Tab.Pane>
 
           {/* In Stock Products Panel */}
           <Tab.Pane eventKey="instock">
-            <Row>
-              {currentInStock.length > 0 ? (
-                currentInStock.map(renderProductCard)
-              ) : (
-                <NoDataCard message="No in-stock products available." icon={<FaBoxOpen />} />
-              )}
-            </Row>
+            {loading ? (
+              <div className="text-center">
+                <Spinner animation="border" />
+              </div>
+            ) : (
+              <>
+                <Row>
+                  {inStock.length > 0 ? (
+                    inStock.map((product) => renderProductCard(product))
+                  ) : (
+                    <NoDataCard 
+                      message="No in-stock products available." 
+                      icon={<FaBoxOpen />} 
+                    />
+                  )}
+                </Row>
 
-            <Pagination className="justify-content-center">
-              {Array.from({ length: inTotalPages }, (_, index) => (
-                <Pagination.Item key={index + 1} active={index + 1 === inCurrentPage} onClick={() => handleInPageChange(index + 1)}>
-                  {index + 1}
-                </Pagination.Item>
-              ))}
-            </Pagination>
+                {inStock.length > 0 && (
+                  <Pagination className="justify-content-center">
+                    {Array.from({ length: Math.ceil(inStock.length / productsPerPage) }, (_, index) => (
+                      <Pagination.Item 
+                        key={index + 1} 
+                        active={index + 1 === inCurrentPage} 
+                        onClick={() => handleInPageChange(index + 1)}
+                      >
+                        {index + 1}
+                      </Pagination.Item>
+                    ))}
+                  </Pagination>
+                )}
+              </>
+            )}
           </Tab.Pane>
         </Tab.Content>
       </Tab.Container>
@@ -407,6 +437,20 @@ const ProductPanel = () => {
       </Modal>
 
       <ToastContainer />
+
+      {loading && <div>Loading...</div>}
+      
+      {error && (
+        <div className="alert alert-danger">
+          {error}
+          <button 
+            className="btn btn-link"
+            onClick={handleRetry}
+          >
+            Retry
+          </button>
+        </div>
+      )}
     </Container>
   );
 };

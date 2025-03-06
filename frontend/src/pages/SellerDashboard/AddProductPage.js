@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { Button, Offcanvas } from "react-bootstrap";
+import { useLocation } from "react-router-dom";
 
 import Header from "../../components_part/header";
 import Sidebar from "../../components_part/DashboardSidebar"; // Import Sidebar Component
@@ -8,8 +9,11 @@ import Footer from "../../components_part/Footer";
 import ProductForm from "./productForm";
 import Outofstock from "./ListOfOutProduct";
 import Title from "../../components_part/TitleCard";
+
 const Dashboard = () => {
   const [show, setShow] = useState(false);
+  const location = useLocation();
+  const { editMode, productData } = location.state || {};
 
   return (
     <div className="dashboard" style={{ backgroundColor: "whitesmoke" }}>
@@ -27,7 +31,10 @@ const Dashboard = () => {
                   <div className="row">
                     {/* User 1 */}
 
-                    <ProductForm/>
+                    <ProductForm 
+                      editMode={editMode} 
+                      productData={productData}
+                    />
              
                     
                     {/* <Footer/> */}

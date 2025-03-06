@@ -7,36 +7,42 @@ import ReactPaginate from "react-paginate";
 import "react-toastify/dist/ReactToastify.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import Title from "../../components_part/TitleCard";
+import { useNavigate } from "react-router-dom";
+
 const ProductsPage = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pageCount, setPageCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
   const [productsPerPage] = useState(6); // Number of products per page
+  const navigate = useNavigate();
 
   // Fetch out-of-stock products
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         const response = await fetch(
-        `${process.env.REACT_APP_BASE_URL}/api/v1/product/outofstock?page=${currentPage + 1}&limit=${productsPerPage}`,
+          `${process.env.REACT_APP_BASE_URL}/api/v1/product/outofstock?page=${currentPage + 1}&limit=${productsPerPage}`,
           {
             method: "GET",
             headers: {
               "Authorization": `Bearer ${localStorage.getItem("token")}`,
-              "Accept": "*/*",
+              "Accept": "application/json",
             },
           }
         );
         const data = await response.json();
+        console.log("Out of stock products response:", data);
 
         if (response.ok) {
           setProducts(data.data);
-          setPageCount(Math.ceil(data.total / productsPerPage)); // Set total page count for pagination
+          setPageCount(Math.ceil(data.total / productsPerPage));
         } else {
-          toast.error("Failed to fetch products");
+          console.error("Error response:", data);
+          toast.error(data.message || "Failed to fetch products");
         }
       } catch (error) {
+        console.error("Fetch error:", error);
         toast.error("Error fetching products");
       } finally {
         setLoading(false);
@@ -49,6 +55,41 @@ const ProductsPage = () => {
   // Handle page change for pagination
   const handlePageChange = (selectedPage) => {
     setCurrentPage(selectedPage.selected);
+  };
+
+  const handleEditProduct = async (product) => {
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_BASE_URL}/api/v1/product/one/${product.id}`,
+        {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${localStorage.getItem("token")}`,
+            "Accept": "application/json",
+          },
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        const productData = data.data;
+        navigate("/seller/add-product", {
+          state: {
+            editMode: true,
+            productData: {
+              ...productData,
+              categoryID: productData.category.id,
+            },
+          },
+        });
+      } else {
+        toast.error(data.message || "Failed to fetch product details");
+      }
+    } catch (error) {
+      console.error("Error fetching product details:", error);
+      toast.error("Error loading product details");
+    }
   };
 
   return (
@@ -85,7 +126,14 @@ const ProductsPage = () => {
                       <Card.Text>
                         <strong>Status:</strong> <span className="text-danger">{product.status}</span>
                       </Card.Text>
-                      <Button variant="outline-primary" disabled>
+                      <Button 
+                        variant="primary" 
+                        className="mb-2 w-100"
+                        onClick={() => handleEditProduct(product)}
+                      >
+                        Edit Product
+                      </Button>
+                      <Button variant="outline-primary" disabled className="w-100">
                         <FontAwesomeIcon icon={faExclamationTriangle} /> Notify Me When Available
                       </Button>
                     </Card.Body>

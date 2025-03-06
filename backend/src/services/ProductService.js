@@ -26,19 +26,22 @@ export const getuserproduct = async (userID) => {
 
 export const getOneProductsWithDetails = async (id) => {
   try {
-    const info = await Products.findByPk(id,{
+    const info = await Products.findByPk(id, {
       include: [
         {
           model: Categories,
           as: "category",
         }
       ],
-
     });
+
+    if (!info) {
+      throw new Error('Product not found');
+    }
 
     return info;
   } catch (error) {
-    console.error("Error fetching all restaurants with users:", error);
+    console.error("Error fetching product details:", error);
     throw error;
   }
 };
@@ -86,40 +89,64 @@ export const generalproducts_available = async () => {
 
 // buyeroutofstock
 
-export const outstock = async () => {
+export const outstock = async (userID) => {
   try {
+    const whereClause = {
+      [Sequelize.Op.or]: [
+        { status: "Out of Stock" },
+        { status: "Pending Approval" },
+        { status: "rejected" }
+      ]
+    };
+
+    // If userID is provided, add it to the where clause
+    if (userID) {
+      whereClause.userID = userID;
+    }
+
     const Info = await Products.findAll({
-      where: {status: "Out of Stock"}, 
+      where: whereClause,
       include: [
         {
           model: Categories,
           as: "category",
         }
       ],
+      order: [['createdAt', 'DESC']] // Sort by newest first
     });
 
     return Info;
   } catch (error) {
-    console.error("Error fetching profile details for user:", error);
+    console.error("Error fetching out of stock products:", error);
     throw error;
   }
 };
 
 export const instock = async (userID) => {
   try {
+    const whereClause = {
+      status: "In Stock"
+    };
+
+    // If userID is provided, add it to the where clause
+    if (userID) {
+      whereClause.userID = userID;
+    }
+
     const Info = await Products.findAll({
-      where: {status: "In Stock"}, 
+      where: whereClause,
       include: [
         {
           model: Categories,
           as: "category",
         }
       ],
+      order: [['createdAt', 'DESC']] // Sort by newest first
     });
 
     return Info;
   } catch (error) {
-    console.error("Error fetching profile details for user:", error);
+    console.error("Error fetching in stock products:", error);
     throw error;
   }
 };
@@ -173,14 +200,50 @@ export const deleteOneProducts = async (id) => {
   return null;
 };
 
-
 export const updateOne = async (id, data) => {
-  const dataToUpdate = await Products.findOne({ where: { id } });
-  if (dataToUpdate) {
-    await Products.update(data, { where: { id } });
-    return data;
+  try {
+    console.log('Service updateOne called with data:', data);
+    
+    const product = await Products.findByPk(id);
+    if (!product) {
+      throw new Error('Product not found');
+    }
+
+    // Validate data types before update
+    const updateData = {
+      ...data,
+      price: parseFloat(data.price),
+      quantity: parseInt(data.quantity),
+      categoryID: parseInt(data.categoryID)
+    };
+
+    // Remove any undefined values
+    Object.keys(updateData).forEach(key => 
+      updateData[key] === undefined && delete updateData[key]
+    );
+
+    console.log('Final update data in service:', updateData);
+
+    await Products.update(updateData, { 
+      where: { id },
+      returning: true
+    });
+
+    // Fetch and return the updated product
+    const updated = await Products.findByPk(id, {
+      include: [
+        {
+          model: Categories,
+          as: "category",
+        }
+      ]
+    });
+
+    return updated;
+  } catch (error) {
+    console.error('Update error in service:', error);
+    throw error;
   }
-  return null;
 };
 
 export const status_change = async (id,status) => {

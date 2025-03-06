@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast, ToastContainer } from 'react-toastify';
 import { Form, Button, Card, Row, Col, Spinner } from 'react-bootstrap';
 import 'react-toastify/dist/ReactToastify.css';
@@ -13,18 +13,24 @@ const AddProductForm = ({ editMode, productData }) => {
     price: "",
     quantity: "",
     image: null,
+    currentImage: null,
   });
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (editMode && productData) {
-      setProduct(prev => ({
-        ...prev,
-        ...productData,
-        image: null // Don't set the image in edit mode unless changed
-      }));
+      setProduct({
+        name: productData.name || "",
+        categoryID: productData.category?.id || productData.categoryID || "",
+        description: productData.description || "",
+        price: String(productData.price || ""), // Convert to string
+        quantity: String(productData.quantity || ""), // Convert to string
+        image: null,
+        currentImage: productData.image || null,
+      });
     }
   }, [editMode, productData]);
 
@@ -62,26 +68,15 @@ const AddProductForm = ({ editMode, productData }) => {
   };
 
   const handleImageChange = (e) => {
-    setProduct((prevState) => ({
-      ...prevState,
-      image: e.target.files[0],
-    }));
-  };
-
-  const validateForm = () => {
-    if (!product.name || !product.categoryID || !product.description || !product.price || !product.quantity) {
-      toast.error("All fields are required!");
-      return false;
+    const file = e.target.files[0];
+    if (file) {
+      console.log('New image selected:', file.name);
+      setProduct(prev => ({
+        ...prev,
+        image: file,
+        currentImage: null // Clear current image when new file is selected
+      }));
     }
-    if (product.price <= 0 || product.quantity < 0) {
-      toast.error("Price must be greater than 0 and quantity must be 0 or greater");
-      return false;
-    }
-    if (!editMode && !product.image) {
-      toast.error("Product image is required!");
-      return false;
-    }
-    return true;
   };
 
   const handleSubmit = async (e) => {
@@ -90,52 +85,150 @@ const AddProductForm = ({ editMode, productData }) => {
 
     setLoading(true);
     const formData = new FormData();
-    formData.append("name", product.name);
-    formData.append("categoryID", product.categoryID);
-    formData.append("description", product.description);
-    formData.append("price", product.price);
-    formData.append("quantity", product.quantity);
-    if (product.image) formData.append("image", product.image);
-
-    const endpoint = editMode 
-      ? `${process.env.REACT_APP_BASE_URL}/api/v1/product/update/${productData.id}`
-      : `${process.env.REACT_APP_BASE_URL}/api/v1/product/add`;
-
+    
     try {
+      // Basic fields
+      formData.append("name", product.name.trim());
+      formData.append("categoryID", String(product.categoryID));
+      formData.append("description", product.description.trim());
+      formData.append("price", String(product.price));
+      formData.append("quantity", String(product.quantity));
+
+      // Handle image
+      if (product.image instanceof File) {
+        formData.append("image", product.image);
+        console.log('Appending new image file:', product.image.name);
+      } else if (editMode && product.currentImage) {
+        formData.append("existingImage", product.currentImage);
+        console.log('Using existing image:', product.currentImage);
+      }
+
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Authentication token not found");
+
+      const endpoint = editMode 
+        ? `${process.env.REACT_APP_BASE_URL}/api/v1/product/update/${productData.id}`
+        : `${process.env.REACT_APP_BASE_URL}/api/v1/product/add`;
+
+      // Debug logging
+      console.log('Submitting form to:', endpoint);
+      console.log('Form data contents:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`${key}: ${value instanceof File ? `File (${value.name})` : value}`);
+      }
+
       const response = await fetch(endpoint, {
         method: editMode ? "PUT" : "POST",
         headers: {
-          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+          "Authorization": `Bearer ${token}`
         },
-        body: formData,
+        body: formData
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        toast.success(editMode ? "Product updated successfully!" : "Product added successfully!");
-        
-        // Notify other components about the stock update
-        const event = new CustomEvent('productStockUpdate', {
-          detail: {
-            productId: editMode ? productData.id : data.data.id,
-            newQuantity: parseInt(product.quantity),
-            action: editMode ? 'update' : 'add'
-          }
-        });
-        window.dispatchEvent(event);
+      const responseText = await response.text();
+      console.log('Raw server response:', responseText);
 
-        // Navigate after a short delay to allow the toast to be seen
-        setTimeout(() => {
-          navigate("/seller/products");
-        }, 2000);
-      } else {
-        toast.error(editMode ? "Failed to update product" : "Failed to add product");
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse response:', e);
+        throw new Error(`Server response error: ${responseText}`);
       }
+
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Failed to process request");
+      }
+
+      toast.success(editMode ? "Product updated successfully!" : "Product added successfully!");
+      
+      // Wait for the toast to be visible
+      setTimeout(() => {
+        navigate("/dashboard/seller/products");
+      }, 2000);
+
     } catch (error) {
-      toast.error(editMode ? "Error updating product" : "Error adding product");
+      console.error("Error details:", error);
+      toast.error(error.message || "Failed to process request");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this product?')) {
+      return;
     }
 
-    setLoading(false);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found");
+      }
+
+      const response = await fetch(
+        `${process.env.REACT_APP_BASE_URL}/api/v1/product/delete/${productData.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || "Failed to delete product");
+      }
+
+      toast.success("Product deleted successfully!");
+      
+      // Use the stored return URL or fall back to a default
+      const returnUrl = location.state?.returnUrl || "/dashboard/seller/products";
+      
+      setTimeout(() => {
+        navigate(returnUrl);
+      }, 2000);
+
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      toast.error(error.message || "Error deleting product");
+    }
+  };
+
+  const validateForm = () => {
+    try {
+      if (!product.name?.trim()) throw new Error("Product name is required");
+      if (!product.categoryID) throw new Error("Category is required");
+      if (!product.description?.trim()) throw new Error("Description is required");
+      
+      const price = parseFloat(product.price);
+      if (isNaN(price) || price <= 0) throw new Error("Price must be a valid number greater than 0");
+      
+      const quantity = parseInt(product.quantity);
+      if (isNaN(quantity) || quantity < 0) throw new Error("Quantity must be a valid non-negative number");
+      
+      // Image validation only for new products or when updating with new image
+      if (!editMode && !product.image) {
+        throw new Error("Product image is required for new products");
+      }
+
+      if (product.image instanceof File) {
+        const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!validImageTypes.includes(product.image.type)) {
+          throw new Error("Please upload a valid image file (JPEG, PNG, GIF, or WEBP)");
+        }
+        
+        if (product.image.size > 5 * 1024 * 1024) {
+          throw new Error("Image file size must be less than 5MB");
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      toast.error(error.message);
+      return false;
+    }
   };
 
   return (
@@ -145,7 +238,7 @@ const AddProductForm = ({ editMode, productData }) => {
           <Title title={editMode ? 'Update Product' : 'Add New Product'}/>
         </Card.Header>
         <Card.Body>
-          <Form onSubmit={handleSubmit}>
+          <Form onSubmit={handleSubmit} encType="multipart/form-data">
             <Row>
               <Col md={6} className="mb-3">
                 <Form.Group controlId="name">
@@ -235,18 +328,36 @@ const AddProductForm = ({ editMode, productData }) => {
               />
             </Form.Group>
 
-            <Button
-              variant="primary"
-              type="submit"
-              className="w-100"
-              disabled={loading}
-            >
-              {loading ? (
-                <Spinner animation="border" size="sm" />
-              ) : (
-                editMode ? "Update Product" : "Add Product"
+            <div className="d-flex justify-content-between">
+              <Button
+                variant="primary"
+                type="submit"
+                className="w-50 me-2"
+                disabled={loading}
+              >
+                {loading ? (
+                  <Spinner animation="border" size="sm" />
+                ) : (
+                  editMode ? "Update Product" : "Add Product"
+                )}
+              </Button>
+
+              {editMode && (
+                <Button
+                  variant="danger"
+                  type="button"
+                  className="w-50 ms-2"
+                  onClick={handleDelete}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <Spinner animation="border" size="sm" />
+                  ) : (
+                    "Delete Product"
+                  )}
+                </Button>
               )}
-            </Button>
+            </div>
           </Form>
         </Card.Body>
       </Card>

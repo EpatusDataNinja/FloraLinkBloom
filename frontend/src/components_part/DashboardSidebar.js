@@ -68,7 +68,7 @@ const Sidebar = ({ show, setShow }) => {
       if (!token) return;
 
       try {
-        const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/notification/`, {
+        const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/notification`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -76,14 +76,14 @@ const Sidebar = ({ show, setShow }) => {
           },
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          setUnreadCount(data.unreadCount || 0);
-        } else {
-          console.error('Failed to fetch notifications');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+
+        const data = await response.json();
+        setUnreadCount(data.unreadCount || 0);
       } catch (error) {
-        console.error('Error fetching notifications:', error);
+        console.error('Failed to fetch notifications:', error);
       }
     };
 

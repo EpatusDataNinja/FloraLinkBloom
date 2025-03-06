@@ -85,7 +85,7 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/settings" element={<Profile />} />
 
-        <Route path="/add_product" element={<AddProduct/>} />
+        <Route path="/add_product" element={<AddProduct />} />
         <Route path="/admin/moderate_product" element={<ModelateProduct/>} />
         <Route path="/product_list" element={<GeneralProductList/>} />  
         <Route path="/products" element={<ProductToBuy/>} />  
@@ -102,6 +102,8 @@ function App() {
         <Route path="/sales/report" element={<SalesReport/>} />   
         <Route path="/chat" element={<Chat/>} /> 
         <Route path="/product/categories" element={<ProductCategories/>} /> 
+        <Route path="/dashboard/seller/add-product" element={<AddProduct />} />
+        <Route path="/dashboard/seller/products" element={<GeneralProductList />} />
       </Routes>
     </BrowserRouter>
   );
