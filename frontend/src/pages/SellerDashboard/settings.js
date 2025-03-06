@@ -2,11 +2,10 @@ import React, { useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { Modal, Offcanvas, Button, Nav } from 'react-bootstrap';
 import '../../css/main2.css';
-import Profile from "../../components/profile";
-import Statistics from "../../components/statistics-component";
-import ProfileDetails from "./profiledetails";
-import Menu from "../../components/MenuDeskTop";
-import Menu2 from "../../components/MenuMobile";
+import Profile from "../../components_part/profile";
+import Statistics from "../../components_part/userstatistics";
+import Menu from "../../components_part/DashboardSidebar";
+import Menu2 from "../../components_part/Sidebar_visitors";
 const Dashboard = () => {
   const [show, setShow] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -53,7 +52,6 @@ const Dashboard = () => {
                         <Statistics />
                         <div style={{marginTop:'2cm'}}> 
                         <Profile  />
-                        <ProfileDetails />
                         </div>
                        
                       </div>

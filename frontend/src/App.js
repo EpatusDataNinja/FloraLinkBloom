@@ -45,9 +45,13 @@ import SalesReport from './pages/SellerDashboard/SalesReportPage';
 import ProductCategories from './pages/SellerDashboard/ProductCategoryPage';
 import PendingProducts from './pages/AdminDashboard/PendingProducts';
 
-
-
-
+// Import profile and settings pages for each role
+import SellerProfile from "./pages/SellerDashboard/user-profile";
+import BuyerProfile from "./pages/BuyerDashboard/user-profile";
+import AdminProfile from "./pages/AdminDashboard/user-profile";
+import SellerSettings from "./pages/SellerDashboard/settings";
+import BuyerSettings from "./pages/BuyerDashboard/settings";
+import AdminSettings from "./pages/AdminDashboard/settings";
 
 // Main App component
 function App() {
@@ -106,6 +110,14 @@ function App() {
         <Route path="/dashboard/seller/add-product" element={<AddProduct />} />
         <Route path="/dashboard/seller/products" element={<GeneralProductList />} />
         <Route path="/admin/pending_products" element={<PendingProducts />} />
+
+        {/* Profile and Settings Routes */}
+        <Route path="/seller-dashboard/user-profile" element={<SellerProfile />} />
+        <Route path="/buyer-dashboard/user-profile" element={<BuyerProfile />} />
+        <Route path="/admin-dashboard/user-profile" element={<AdminProfile />} />
+        <Route path="/seller-dashboard/settings" element={<SellerSettings />} />
+        <Route path="/buyer-dashboard/settings" element={<BuyerSettings />} />
+        <Route path="/admin-dashboard/settings" element={<AdminSettings />} />
       </Routes>
     </BrowserRouter>
   );

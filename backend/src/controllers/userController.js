@@ -420,101 +420,74 @@ export const getOneUser = async (req, res) => {
 
 export const updateOneUser = async (req, res) => {
   try {
-    console.log('=== Profile Update Request ===');
+    console.log('=== Starting User Update ===');
     console.log('User ID:', req.params.id);
-    console.log('Request body:', JSON.stringify(req.body, null, 2));
-    console.log('File:', req.file);
-    console.log('Authenticated user:', req.user);
+    console.log('Request body:', req.body);
+    console.log('Request file:', req.file);
 
-    // Check if the user exists
-    const existingUser = await getUser(req.params.id);
-    if (!existingUser) {
-      console.log('ERROR: User not found with ID:', req.params.id);
-      return res.status(404).json({
+    // Validate user ID
+    if (!req.params.id) {
+      console.error('No user ID provided');
+      return res.status(400).json({
         success: false,
-        message: "User not found"
+        message: "User ID is required"
       });
     }
-    console.log('Found existing user:', JSON.stringify(existingUser, null, 2));
 
-    // Validate the request body
-    const allowedFields = ['firstname', 'lastname', 'phone', 'gender', 'address'];
-    const updateData = {};
-    
-    // Handle text fields from FormData
-    allowedFields.forEach(field => {
-      if (req.body[field] !== undefined && req.body[field] !== null && req.body[field] !== '') {
-        updateData[field] = req.body[field];
-      }
-    });
-
-    console.log('Fields to update:', JSON.stringify(updateData, null, 2));
-
-    // Handle image upload if present
+    let image; 
     if (req.file) {
       try {
-        // Create a URL for the uploaded file
-        const fileUrl = `${process.env.BASE_URL || ''}/uploads/${req.file.filename}`;
-        updateData.image = fileUrl;
-        console.log('Image uploaded successfully:', fileUrl);
+        console.log('Processing image upload...');
+        image = await imageUploader(req);
+        if (!image || !image.url) {
+          throw new Error('Upload failed or image URL missing');
+        }
+        req.body.image = image.url;
+        console.log('Image uploaded successfully:', image.url);
       } catch (error) {
-        console.error('Error handling image:', error);
-        return res.status(500).json({
+        console.error('Error uploading image:', error);
+        return res.status(400).json({
           success: false,
-          message: "Error processing image",
+          message: "Failed to upload image",
           error: error.message
         });
       }
     }
 
-    // If no valid fields to update
-    if (Object.keys(updateData).length === 0) {
-      console.log('No fields to update');
-      return res.status(400).json({
+    console.log('Updating user with data:', req.body);
+    const user = await updateUser(req.params.id, req.body);
+    
+    if (!user) {
+      console.error('User not found with ID:', req.params.id);
+      return res.status(404).json({
         success: false,
-        message: "No valid fields to update"
+        message: "User not found"
       });
     }
 
-    console.log('Attempting to update user with data:', JSON.stringify(updateData, null, 2));
+    console.log('User updated successfully:', user);
 
-    // Update user
-    const updatedUser = await updateUser(req.params.id, updateData);
-    if (!updatedUser) {
-      console.log('Failed to update user');
-      return res.status(400).json({
-        success: false,
-        message: "Failed to update user"
-      });
-    }
-
-    console.log('Successfully updated user:', JSON.stringify(updatedUser, null, 2));
-
-    // Create notification if updated by admin
-    if (req.params.id != req.user.id) {
-      await createNotification({
+    if(req.params.id != req.user.id) {
+      const notification = await createNotification({ 
         userID: req.params.id,
-        title: "Account Updated",
-        message: "Your account has been updated by admin",
-        type: 'account',
-        isRead: false
+        title: "Your account has been updated", 
+        message: "Your account has been edited by admin", 
+        type: 'account', 
+        isRead: false 
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: "Profile updated successfully",
-      user: updatedUser
+      message: "User updated successfully",
+      user
     });
   } catch (error) {
-    console.error('=== Error in updateOneUser ===');
-    console.error('Error details:', error);
-    console.error('Error stack:', error.stack);
+    console.error('Error updating user:', error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error",
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: "Something went wrong",
+      error: error.message
     });
   }
 };
@@ -800,23 +773,44 @@ export const getAdminOverview = async (req, res) => {
 
 export const getSellerOverview = async (req, res) => {
   try {
-
-    let role = req.user.role;
-    if (role != "seller") {
-      return res.status(400).json({
+    console.log('[INFO] Getting seller overview. User:', req.user);
+    
+    // Check if user exists and has a role
+    if (!req.user) {
+      console.error('[ERROR] No user object in request');
+      return res.status(401).json({
         success: false,
-        message: "You are not allowed seller!",
+        message: "Authentication required"
       });
     }
-    const sellerId = req.user.id; // Logged-in user ID
-    console.log(`[INFO] Fetching overview for seller ID: ${sellerId}`);
 
-    // Check if the user is a seller
-    const seller = await Users.findOne({ where: { id: sellerId, role: "seller" } });
-    if (!seller) {
-      console.log(`[ERROR] User ${sellerId} is not authorized to view seller stats.`);
-      return res.status(403).json({ error: "Access denied. Only sellers can view this overview." });
+    if (!req.user.role) {
+      console.error('[ERROR] User has no role:', req.user);
+      return res.status(400).json({
+        success: false,
+        message: "User role not found"
+      });
     }
+
+    // Check if user is a seller
+    if (req.user.role !== "seller") {
+      console.error('[ERROR] User is not a seller:', req.user.role);
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only sellers can view this overview."
+      });
+    }
+
+    const sellerId = req.user.id;
+    if (!sellerId) {
+      console.error('[ERROR] User has no ID:', req.user);
+      return res.status(400).json({
+        success: false,
+        message: "User ID not found"
+      });
+    }
+
+    console.log(`[INFO] Fetching overview for seller ID: ${sellerId}`);
 
     // Get products listed by the seller
     const products = await Products.findAll({
@@ -885,36 +879,63 @@ export const getSellerOverview = async (req, res) => {
     });
   } catch (error) {
     console.error("[ERROR] Failed to fetch seller overview:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ 
+      success: false,
+      message: "Internal server error",
+      error: error.message 
+    });
   }
 };
 
 export const getBuyerOverview = async (req, res) => {
   try {
-
-    let role = req.user.role;
-    if (role != "buyer") {
-      return res.status(400).json({
+    console.log('[INFO] Getting buyer overview. User:', req.user);
+    
+    // Check if user exists and has a role
+    if (!req.user) {
+      console.error('[ERROR] No user object in request');
+      return res.status(401).json({
         success: false,
-        message: "You are not allowed to add products",
+        message: "Authentication required"
       });
     }
-    const buyerId = req.user.id; // Logged-in buyer ID
+
+    if (!req.user.role) {
+      console.error('[ERROR] User has no role:', req.user);
+      return res.status(400).json({
+        success: false,
+        message: "User role not found"
+      });
+    }
+
+    // Check if user is a buyer
+    if (req.user.role !== "buyer") {
+      console.error('[ERROR] User is not a buyer:', req.user.role);
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only buyers can view this overview."
+      });
+    }
+
+    const buyerId = req.user.id;
+    if (!buyerId) {
+      console.error('[ERROR] User has no ID:', req.user);
+      return res.status(400).json({
+        success: false,
+        message: "User ID not found"
+      });
+    }
+
     console.log(`[INFO] Fetching overview for buyer ID: ${buyerId}`);
 
-    // Check if the user is a buyer
-    const buyer = await Users.findOne({ where: { id: buyerId, role: "buyer" } });
-    if (!buyer) {
-      console.log(`[ERROR] User ${buyerId} is not authorized to view buyer stats.`);
-      return res.status(403).json({ error: "Access denied. Only buyers can view this overview." });
-    }
-    // userID
     // Get all orders placed by the buyer
     const orders = await Orders.findAll({
-      where: { userID:buyerId },
+      where: { userID: buyerId },
       attributes: ["status", "totalAmount"],
       raw: true,
     });
+
+    console.log(`[INFO] Found ${orders.length} orders for buyer`);
 
     const orderStats = orders.reduce(
       (acc, order) => {
@@ -930,7 +951,7 @@ export const getBuyerOverview = async (req, res) => {
     // Get total unpaid orders (status: "pending")
     const totalUnpaidOrders = orderStats["pending"] || 0;
 
-    console.log(`[INFO] Buyer overview fetched for buyer ID: ${buyerId}`);
+    console.log(`[INFO] Buyer overview fetched successfully for buyer ID: ${buyerId}`);
 
     return res.status(200).json({
       success: true,
@@ -941,7 +962,11 @@ export const getBuyerOverview = async (req, res) => {
     });
   } catch (error) {
     console.error("[ERROR] Failed to fetch buyer overview:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ 
+      success: false,
+      message: "Internal server error",
+      error: error.message 
+    });
   }
 };
 

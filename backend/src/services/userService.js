@@ -221,25 +221,19 @@ export const updateUser = async (id, user) => {
     
     // Perform the update
     console.log('Attempting to update user with data:', JSON.stringify(user, null, 2));
-    const [updatedCount, updatedRows] = await users.update(user, { 
-      where: { id },
-      returning: true // This will return the updated rows
+    await users.update(user, { 
+      where: { id }
     });
     
-    console.log('Update operation result:', {
-      updatedCount,
-      updatedRows: updatedRows ? updatedRows[0].toJSON() : null
-    });
-    
-    if (updatedCount > 0) {
-      // Get the updated user
-      const updatedUser = await users.findByPk(id);
-      console.log('Successfully updated user:', JSON.stringify(updatedUser.toJSON(), null, 2));
-      return updatedUser.toJSON();
+    // Get the updated user
+    const updatedUser = await users.findByPk(id);
+    if (!updatedUser) {
+      console.log('ERROR: Failed to retrieve updated user');
+      return null;
     }
     
-    console.log('No rows were updated');
-    return null;
+    console.log('Successfully updated user:', JSON.stringify(updatedUser.toJSON(), null, 2));
+    return updatedUser.toJSON();
   } catch (error) {
     console.error('=== Error in updateUser ===');
     console.error('Error details:', error);

@@ -5,7 +5,6 @@ import { BiEnvelope, BiPhone, BiMap } from 'react-icons/bi';
 import { Modal, Button } from 'react-bootstrap';
 import { FaInfoCircle } from 'react-icons/fa';
 import LoadingSpinner from './loading';
-import axios from 'axios';
 
 const LandingPage = () => {
     const [formData, setFormData] = useState({
@@ -59,23 +58,33 @@ const LandingPage = () => {
         setLoading(true);
         const user = localStorage.getItem('user');
         if (user) {
-            const parsedUser = JSON.parse(user);
-            setStatus(parsedUser.status);
-            setFormData({
-                firstname: parsedUser.firstname || '',
-                lastname: parsedUser.lastname || '',
-                email: parsedUser.email || '',
-                phone: parsedUser.phone || '',
-                gender: parsedUser.gender || '',
-                image: parsedUser.image || '',
-            });
-            setLoading(false);
-            setID(parsedUser.id);
-            setSelectedUser(parsedUser);
-            setImage(parsedUser.image)
+            try {
+                const parsedUser = JSON.parse(user);
+                console.log('Parsed user data:', parsedUser);
+                setStatus(parsedUser.status);
+                setFormData({
+                    firstname: parsedUser.firstname || '',
+                    lastname: parsedUser.lastname || '',
+                    email: parsedUser.email || '',
+                    phone: parsedUser.phone || '',
+                    gender: parsedUser.gender || '',
+                    image: parsedUser.image || '',
+                });
+                setID(parsedUser.id);
+                setSelectedUser(parsedUser);
+                
+                // Set the image URL
+                if (parsedUser.image) {
+                    console.log('Initial image URL:', parsedUser.image);
+                    setImage(parsedUser.image);
+                }
+            } catch (error) {
+                console.error('Error parsing user data:', error);
+            }
         } else {
             console.error('User information not found in local storage');
         }
+        setLoading(false);
     }, []);
 
     const handleChange = (e) => {
@@ -104,149 +113,74 @@ const LandingPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
 
         try {
-            // Create form data for the request
-            const formDataToSend = new FormData();
-            
-            // Append text fields that have changed
-            Object.keys(formData).forEach(key => {
-                if (['firstname', 'lastname', 'phone', 'gender'].includes(key) && 
-                    formData[key] !== selectedUser[key] && 
-                    formData[key] !== undefined && 
-                    formData[key] !== null && 
-                    formData[key] !== '') {
-                    formDataToSend.append(key, formData[key]);
-                }
+            setLoading(true);
+            const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/users/update/${ID}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(formData),
             });
 
-            // Append image if it exists
-            if (formDataImage.image) {
-                formDataToSend.append('image', formDataImage.image);
-            }
+            if (response.ok) {
+                const res = await response.json();
+                toast.success(res.message);
+                const updatedUser = { ...selectedUser, ...formData };
+                localStorage.setItem('user', JSON.stringify(updatedUser));
 
-            // If no fields have changed, show message and return
-            if (formDataToSend.keys().length === 0) {
-                toast.info('No changes to update');
-                setLoading(false);
-                return;
-            }
-
-            // Log the form data being sent
-            console.log('Sending update request with data:', {
-                userId: ID,
-                formData: Object.fromEntries(formDataToSend.entries()),
-                hasImage: !!formDataImage.image
-            });
-
-            const response = await axios.put(
-                `${process.env.REACT_APP_BASE_URL}/api/v1/users/update/${ID}`,
-                formDataToSend,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'multipart/form-data',
-                    },
-                    timeout: 10000,
-                }
-            );
-
-            if (response.data.success) {
-                // Get current user data from localStorage
-                const userData = JSON.parse(localStorage.getItem('user'));
-                
-                // Update localStorage with new user data
-                const updatedUserData = {
-                    ...userData,
-                    ...response.data.user
-                };
-                localStorage.setItem('user', JSON.stringify(updatedUserData));
-
-                // Update component state
-                setSelectedUser(updatedUserData);
-                setFormData(updatedUserData);
-                if (response.data.user.image) {
-                    setImage(response.data.user.image);
-                }
-
-                toast.success('Profile updated successfully');
-                setFormDataImage({ image: null });
-                
-                // Close modal if it's open
-                if (showFileUploadModal) {
-                    handleCloseFileUploadModal();
-                }
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+                window.location.reload();
             } else {
-                throw new Error(response.data.message || 'Failed to update profile');
+                const errorData = await response.json();
+                setError(errorData.message);
+                toast.error(errorData.message);
             }
         } catch (error) {
-            console.error('Profile update error:', {
-                message: error.message,
-                response: error.response?.data,
-                status: error.response?.status
-            });
-
-            if (error.response?.status === 500) {
-                toast.error(error.response.data.message || 'Server error. Please try again later.');
-            } else if (error.response?.data?.message) {
-                toast.error(error.response.data.message);
-            } else if (error.code === 'ECONNABORTED') {
-                toast.error('Request timed out. Please check your connection.');
-            } else {
-                toast.error(error.message || 'Failed to update profile');
-            }
-        } finally {
-            setLoading(false);
+            console.error('Error updating user profile', error);
+            setError('Failed to update user profile. Please try again later.');
         }
     };
 
     const handleSubmit1 = async (e) => {
         e.preventDefault();
 
-        if (formData1.newPassword !== formData1.confirmPassword) {
-            toast.error('Passwords do not match');
-            return;
-        }
-
         try {
             setLoading(true);
-            const token = localStorage.getItem('token');
             const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/users/changePassword`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify(formData1),
+                body: JSON.stringify({
+                    ...formData1,
+                }),
             });
 
             if (response.ok) {
                 const res = await response.json();
                 toast.success(res.message);
-                handleClosePasswordModal();
-                setFormData1({
-                    oldPassword: '',
-                    newPassword: '',
-                    confirmPassword: ''
-                });
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+                window.location.reload();
             } else {
                 const errorData = await response.json();
+                setError(errorData.message);
                 toast.error(errorData.message);
             }
         } catch (error) {
             console.error('Error changing password', error);
-            toast.error('Failed to change password');
-        } finally {
-            setLoading(false);
+            setError('Failed to change password. Please try again later.');
         }
     };
 
     const handleSubmitProfile = async (e) => {
         e.preventDefault();
-
-        if (!formDataImage.image) {
-            toast.error('Please select an image');
+        if (!ID) {
+            console.error('No user ID found');
+            toast.error('User ID not found. Please try logging in again.');
             return;
         }
 
@@ -255,41 +189,42 @@ const LandingPage = () => {
             const formDataUpload = new FormData();
             formDataUpload.append('image', formDataImage.image);
 
-            const response = await axios.put(
-                `${process.env.REACT_APP_BASE_URL}/api/v1/users/update/${ID}`,
-                formDataUpload,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'multipart/form-data',
-                    },
-                    timeout: 10000,
-                }
-            );
+            console.log('Sending request to update user:', ID);
 
-            if (response.data.success) {
-                toast.success(response.data.message);
+            const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/users/update/${ID}`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+                body: formDataUpload,
+            });
 
-                // Update local storage and state with new image
-                const updatedUser = { ...selectedUser, image: response.data.user.image };
+            const responseData = await response.json();
+            console.log('Server response:', responseData);
+
+            if (response.ok) {
+                toast.success(responseData.message);
+                
+                // Update local state and storage with new image
+                const updatedUser = { ...selectedUser, image: responseData.user.image };
                 localStorage.setItem('user', JSON.stringify(updatedUser));
-                setFormData(prev => ({ ...prev, image: response.data.user.image }));
-                setImage(response.data.user.image);
-                handleCloseFileUploadModal();
+                
+                // Set the image URL directly from the response
+                if (responseData.user.image) {
+                    console.log('New image URL:', responseData.user.image);
+                    setImage(responseData.user.image);
+                }
+                
+                // Reset form and close modal
+                setFormDataImage({ image: null });
+                setShowFileUploadModal(false);
             } else {
-                throw new Error(response.data.message || 'Failed to update profile picture');
+                setError(responseData.message);
+                toast.error(responseData.message);
             }
         } catch (error) {
             console.error('Error updating profile picture:', error);
-            if (error.response?.status === 500) {
-                toast.error('Server error. Please try again later.');
-            } else if (error.response?.data?.message) {
-                toast.error(error.response.data.message);
-            } else if (error.code === 'ECONNABORTED') {
-                toast.error('Request timed out. Please check your connection.');
-            } else {
-                toast.error(error.message || 'Failed to update profile picture');
-            }
+            setError('Failed to update profile picture. Please try again later.');
         } finally {
             setLoading(false);
         }
@@ -306,23 +241,44 @@ const LandingPage = () => {
                             <div className="info-container d-flex flex-column align-items-center justify-content-center" style={{ backgroundColor: 'white', fontFamily: 'arial' }}>
                                 <div className="info-itemx d-flex">
                                     <div>
-                                        {image && image !== 'null' ? (
-                                            <img src={image} className="img-fluid" alt="" style={{ borderRadius: '10px', marginBottom: '0.5cm', width: '11cm' }} onClick={handleToggleFileUploadModal} />
-
+                                        {image ? (
+                                            <img 
+                                                src={image} 
+                                                alt="Profile" 
+                                                style={{ 
+                                                    width: '150px', 
+                                                    height: '150px', 
+                                                    borderRadius: '50%', 
+                                                    objectFit: 'cover',
+                                                    marginBottom: '20px',
+                                                    cursor: 'pointer'
+                                                }} 
+                                                onClick={handleToggleFileUploadModal}
+                                            />
                                         ) : (
-                                            <img src="/assets/img/images (3).png" className="img-fluid" alt="Default Image" style={{ borderRadius: '10px', marginBottom: '0.5cm', width: '9cm' }} onClick={handleToggleFileUploadModal} />
-
+                                            <div 
+                                                style={{ 
+                                                    width: '150px', 
+                                                    height: '150px', 
+                                                    borderRadius: '50%', 
+                                                    backgroundColor: '#f0f0f0',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    marginBottom: '20px',
+                                                    cursor: 'pointer'
+                                                }}
+                                                onClick={handleToggleFileUploadModal}
+                                            >
+                                                <span style={{ fontSize: '48px' }}>👤</span>
+                                            </div>
                                         )}
                                     </div>
-
-
                                 </div>
 
-                                {/* <div className="info-item d-flex" style={{ backgroundColor: 'white', color: 'black' }}> */}
-                                <p style={{ fontFamily: 'arial', color: 'green', marginTop: '-0.3cm', marginBottom: 'cm', marginRight: '0.2cm', textAlign: 'center' }}>
+                                <p style={{ fontFamily: 'arial', color: 'green', marginTop: '-0.3cm', marginBottom: 'cm', marginRight: '0.2cm', textAlign: 'center', cursor: 'pointer' }} onClick={handleToggleFileUploadModal}>
                                     <FaInfoCircle style={{ color: 'green' }} /> Click to your profile pic to edit !
                                 </p>
-                                {/* </div> */}
 
                                 <div className="info-item " style={{ backgroundColor: 'whitesmoke', color: 'black' }}>
                                     <div>

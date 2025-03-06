@@ -1,6 +1,6 @@
 import { FaBell, FaUser, FaCog, FaSignOutAlt, FaEnvelope } from "react-icons/fa";
 import Badge from "react-bootstrap/Badge";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import React, { useState, useEffect } from "react";
 import Image from './user.png'
 import Title from "../components_part/TitleCard";
@@ -10,16 +10,31 @@ const Header = ({ setShow }) => {
     const [user, setUser] = useState(null);
     const [unreadCount, setUnreadCount] = useState(0);
     const navigate = useNavigate();
+    const location = useLocation();
 
     const handleLogout = () => {
-        // Logout logic here
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         navigate("/auto");
     };
 
+    const handleProfileClick = () => {
+        setDropdownOpen(false);
+        navigate('/profile');
+    };
+
+    const handleSettingsClick = () => {
+        setDropdownOpen(false);
+        if (user?.role === 'seller') {
+            navigate('/seller-dashboard/settings');
+        } else if (user?.role === 'buyer') {
+            navigate('/buyer-dashboard/settings');
+        } else if (user?.role === 'admin') {
+            navigate('/admin-dashboard/settings');
+        }
+    };
+
     useEffect(() => {
-        // Fetch user information from localStorage or an API
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
             setUser(JSON.parse(storedUser));
@@ -57,6 +72,18 @@ const Header = ({ setShow }) => {
         return () => clearInterval(interval);
     }, [navigate]);
 
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownOpen && !event.target.closest('.position-relative')) {
+                setDropdownOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [dropdownOpen]);
+
     return (
         <header className="top-bar d-flex justify-content-between align-items-center p-3 bg-success text-white">
             <div className="d-flex align-items-center">
@@ -70,7 +97,6 @@ const Header = ({ setShow }) => {
             <input type="text" className="form-control w-50 d-none d-md-block" placeholder="Search..." />
             <div className="d-flex align-items-center position-relative">
                 <button className="btn me-3 position-relative">
-
                     <div className="position-relative text-center">
                         <FaEnvelope className="me-3" style={{ color: 'white' }} size={24} />
                         <Link to="/notifications" className="text-light text-decoration-none">
@@ -82,8 +108,6 @@ const Header = ({ setShow }) => {
                             )}
                         </Link>
                     </div>
-
-
                 </button>
 
                 {/* Profile Section */}
@@ -104,13 +128,27 @@ const Header = ({ setShow }) => {
                     {dropdownOpen && (
                         <div className="position-absolute end-0 mt-2 bg-white shadow-sm rounded p-2" style={{ width: "180px", zIndex: 1000 }}>
                             <ul className="list-unstyled mb-0">
-                                <li className="p-2 d-flex align-items-center" style={{ cursor: "pointer" }}>
-                                    <FaUser className="me-2 text-success" />  <span style={{ color: 'green' }}>Profile</span>
+                                <li 
+                                    className="p-2 d-flex align-items-center" 
+                                    style={{ cursor: "pointer" }}
+                                    onClick={handleProfileClick}
+                                >
+                                    <FaUser className="me-2 text-success" />  
+                                    <span style={{ color: 'green' }}>Profile</span>
                                 </li>
-                                <li className="p-2 d-flex align-items-center" style={{ cursor: "pointer" }}>
-                                    <FaCog className="me-2 text-success" /> <span style={{ color: 'green' }}>Settings</span>
+                                <li 
+                                    className="p-2 d-flex align-items-center" 
+                                    style={{ cursor: "pointer" }}
+                                    onClick={handleSettingsClick}
+                                >
+                                    <FaCog className="me-2 text-success" /> 
+                                    <span style={{ color: 'green' }}>Settings</span>
                                 </li>
-                                <li className="p-2 d-flex align-items-center text-danger" style={{ cursor: "pointer" }} onClick={handleLogout}>
+                                <li 
+                                    className="p-2 d-flex align-items-center text-danger" 
+                                    style={{ cursor: "pointer" }} 
+                                    onClick={handleLogout}
+                                >
                                     <FaSignOutAlt className="me-2" /> Logout
                                 </li>
                             </ul>

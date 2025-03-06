@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import {Offcanvas, Button } from 'react-bootstrap';
+import { Modal, Offcanvas, Button, Nav } from 'react-bootstrap';
 import '../../css/main2.css';
-import Profile from "../../components/profile";
-import Menu from "../../components/MenuDeskTop";
-import Menu2 from "../../components/MenuMobile";
+import Profile from "../../components_part/profile";
+import Menu from "../../components_part/DashboardSidebar";
+import Menu2 from "../../components_part/Sidebar_visitors";
 const Dashboard = () => {
   const [show, setShow] = useState(false);
   const [showModal, setShowModal] = useState(false);

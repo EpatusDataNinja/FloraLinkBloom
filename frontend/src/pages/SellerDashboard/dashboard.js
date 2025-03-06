@@ -6,39 +6,80 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import Title from "../../components_part/TitleCard";
 // Register chart.js elements
 ChartJS.register(ArcElement, Tooltip, Legend);
-const TOKEN =  localStorage.getItem("token");
 
 const SellerOverview = () => {
   const [stats, setStats] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
     const fetchData = async () => {
-      const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/users/seller/overview`, {
-        method: 'GET',
-        headers: {
-          'accept': '*/*',
-          'Authorization': `Bearer ${TOKEN}`
-        },
-      });
-      const data = await response.json();
-      if (data.success) {
-        setStats(data);
+      try {
+        setLoading(true);
+        setError(null);
+
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/users/seller/overview`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          },
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            throw new Error('Authentication failed. Please log in again.');
+          }
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to fetch seller overview');
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          setStats(data);
+        } else {
+          throw new Error(data.message || 'Failed to fetch seller overview');
+        }
+      } catch (error) {
+        console.error('Error fetching seller overview:', error);
+        setError(error.message);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [token]);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return <div>Error: {error}</div>;
+  }
 
   if (!stats) {
-    return <div>Loading...</div>;
+    return <div>No data available</div>;
   }
 
   // Data for Pie charts
   const productChartData = {
     labels: ['In Stock', 'Out of Stock', 'Rejected'],
     datasets: [{
-      data: [stats.productStats['In Stock'], stats.productStats['Out of Stock'], stats.productStats.rejected],
-      backgroundColor: ['#4caf50', '#f44336', '#ff9800'], // Green, Red, Orange
+      data: [
+        stats.productStats['In Stock'] || 0,
+        stats.productStats['Out of Stock'] || 0,
+        stats.productStats.rejected || 0
+      ],
+      backgroundColor: ['#4caf50', '#f44336', '#ff9800'],
       borderWidth: 1,
     }],
   };
@@ -46,8 +87,13 @@ const SellerOverview = () => {
   const orderChartData = {
     labels: ['Paid', 'Shipped', 'Delivered', 'Completed'],
     datasets: [{
-      data: [stats.orderStats.paid, stats.orderStats.shipped || 0, stats.orderStats.delivered || 0, stats.orderStats.completed],
-      backgroundColor: ['#4caf50', '#ff9800', '#2196f3', '#f44336'], // Green, Orange, Blue, Red
+      data: [
+        stats.orderStats.paid || 0,
+        stats.orderStats.shipped || 0,
+        stats.orderStats.delivered || 0,
+        stats.orderStats.completed || 0
+      ],
+      backgroundColor: ['#4caf50', '#ff9800', '#2196f3', '#f44336'],
       borderWidth: 1,
     }],
   };
@@ -84,27 +130,26 @@ const SellerOverview = () => {
 
   return (
     <div className="container mt-4">
-  
-      <Title title={'Overview '}/>
+      <Title title={'Seller Overview'}/>
 
       {/* Cards Section */}
-      <Row className="mb-4 g-4"> {/* g-4 to add gutter spacing between columns */}
+      <Row className="mb-4 g-4">
         {/* Products Statistics Card */}
         <Col xs={12} md={6} lg={4}>
           <Card className="text-white" style={{ backgroundColor: '#4caf50' }}>
             <Card.Body>
               <Card.Title><FaBox size={32} color="white" /> Products</Card.Title>
               <Card.Text>
-                <strong>Total Products:</strong> {stats.productStats.totalProducts}
+                <strong>Total Products:</strong> {stats.productStats.totalProducts || 0}
               </Card.Text>
               <Card.Text>
-                <strong>In Stock:</strong> {stats.productStats['In Stock']} {renderProductStatus('In Stock')}
+                <strong>In Stock:</strong> {stats.productStats['In Stock'] || 0} {renderProductStatus('In Stock')}
               </Card.Text>
               <Card.Text>
-                <strong>Out of Stock:</strong> {stats.productStats['Out of Stock']} {renderProductStatus('Out of Stock')}
+                <strong>Out of Stock:</strong> {stats.productStats['Out of Stock'] || 0} {renderProductStatus('Out of Stock')}
               </Card.Text>
               <Card.Text>
-                <strong>Rejected:</strong> {stats.productStats.rejected} {renderProductStatus('Rejected')}
+                <strong>Rejected:</strong> {stats.productStats.rejected || 0} {renderProductStatus('Rejected')}
               </Card.Text>
             </Card.Body>
           </Card>
@@ -116,22 +161,22 @@ const SellerOverview = () => {
             <Card.Body>
               <Card.Title><FaShoppingCart size={32} color="white" /> Orders</Card.Title>
               <Card.Text>
-                <strong>Total Orders:</strong> {stats.orderStats.totalOrders}
+                <strong>Total Orders:</strong> {stats.orderStats.totalOrders || 0}
               </Card.Text>
               <Card.Text>
-                <strong>Completed:</strong> {stats.orderStats.completed} {renderOrderStatus('completed')}
+                <strong>Completed:</strong> {stats.orderStats.completed || 0} {renderOrderStatus('completed')}
               </Card.Text>
               <Card.Text>
-                <strong>Paid:</strong> {stats.orderStats.paid} {renderOrderStatus('paid')}
+                <strong>Paid:</strong> {stats.orderStats.paid || 0} {renderOrderStatus('paid')}
               </Card.Text>
               <Card.Text>
-                <strong>Shipped:</strong> {stats.orderStats.shipped} {renderOrderStatus('shipped')}
+                <strong>Shipped:</strong> {stats.orderStats.shipped || 0} {renderOrderStatus('shipped')}
               </Card.Text>
               <Card.Text>
-                <strong>Delivered:</strong> {stats.orderStats.delivered} {renderOrderStatus('delivered')}
+                <strong>Delivered:</strong> {stats.orderStats.delivered || 0} {renderOrderStatus('delivered')}
               </Card.Text>
               <Card.Text>
-                <strong>Total Revenue:</strong> ${stats.orderStats.totalRevenue}
+                <strong>Total Revenue:</strong> ${stats.orderStats.totalRevenue || 0}
               </Card.Text>
             </Card.Body>
           </Card>
@@ -143,7 +188,7 @@ const SellerOverview = () => {
             <Card.Body>
               <Card.Title><FaDollarSign size={32} color="white" /> Total Profit</Card.Title>
               <Card.Text>
-                <strong>Profit:</strong> ${stats.totalProfit}
+                <strong>Profit:</strong> ${stats.totalProfit || 0}
               </Card.Text>
             </Card.Body>
           </Card>

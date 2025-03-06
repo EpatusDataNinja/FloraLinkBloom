@@ -16,9 +16,10 @@ const app = express();
 const corsOptions = {
   origin: process.env.FRONTEND_URL || 'http://localhost:3000', // Replace with your frontend URL
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  credentials: false
+  credentials: true,
+  preflightContinue: false
 };
 
 app.use(cors(corsOptions));
@@ -33,6 +34,7 @@ app.use(express.urlencoded({ extended: true }));
 // Make the uploads directory static
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// Routes
 app.use("/api/v1", router);
 app.use("/api/v1/notification", notificationRouter);
 app.use("/api/v1/product", productRouter);

@@ -3,8 +3,8 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { Modal, Offcanvas, Button, Nav, Container, Row, Col } from 'react-bootstrap';
 import '../../css/main2.css';
 import Profile from "../../components_part/profile";
-import Menu from "../../components/MenuDeskTop";
-import Menu2 from "../../components/MenuMobile";
+import Menu from "../../components_part/DashboardSidebar";
+import Menu2 from "../../components_part/Sidebar_visitors";
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
