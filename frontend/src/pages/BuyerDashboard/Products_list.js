@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react"; 
 import { Button, Card, Col, Row, Container, Modal, Form, Pagination, Spinner } from "react-bootstrap";
 import axios from "axios";
-import { FaBox, FaDollarSign, FaCheckCircle, FaShoppingCart, FaTags, FaPhone } from "react-icons/fa";
+import { FaBox, FaDollarSign, FaCheckCircle, FaShoppingCart, FaTags, FaPhone, FaCartPlus } from "react-icons/fa";
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Title from "../../components_part/TitleCard";
@@ -21,19 +21,35 @@ const InStockProducts = () => {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      let token = localStorage.getItem("token");
+      const token = localStorage.getItem("token");
       if (!token) {
-        toast.error("No token found! Please login.");
-        setLoading(false);
+        toast.error("Please login to view products");
+        navigate('/login');
         return;
       }
 
-      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/api/v1/product/instock`, {
-        headers: { Authorization: `Bearer ${token}` },
+      console.log("Fetching products with token:", token.substring(0, 10) + "...");
+
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/api/v1/product`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
       });
 
-      setInStock(response.data.data);
+      console.log('API Response:', response.data);
+
+      if (response.data.success) {
+        const products = response.data.data;
+        console.log('Products before filtering:', products);
+        console.log('Product statuses:', products.map(p => p.status));
+        setInStock(products);
+      } else {
+        console.error('API Error:', response.data);
+        toast.error(response.data.message || "Failed to fetch products");
+      }
     } catch (error) {
+      console.error("Error fetching products:", error);
       toast.error("Error fetching products");
     } finally {
       setLoading(false);
@@ -63,7 +79,7 @@ const InStockProducts = () => {
       return;
     }
 
-    setLoading(true);  // Set loading state to true when order submission begins
+    setLoading(true);
 
     try {
       let token = localStorage.getItem("token");
@@ -87,11 +103,10 @@ const InStockProducts = () => {
     } catch (error) {
       toast.error("Failed to place order!");
     } finally {
-      setLoading(false);  // Reset loading state after the order is completed
+      setLoading(false);
     }
   };
 
-  // Calculate total amount to be paid
   const totalAmount = selectedProduct ? orderData.quantity * selectedProduct.price : 0;
 
   const addToCart = (product) => {
@@ -152,22 +167,33 @@ const InStockProducts = () => {
             currentInStock.map((product) => (
               <Col md={4} key={product.id}>
                 <Card className="mb-4 shadow-lg border-0">
-                  <Card.Img variant="top" src={product.image} className="product-image" />
+                  <Card.Img 
+                    variant="top" 
+                    src={`${process.env.REACT_APP_BASE_URL}${product.image}`} 
+                    className="product-image" 
+                  />
                   <Card.Body>
                     <Card.Title className="fw-bold">{product.name}</Card.Title>
-                    <Card.Text><FaTags className="text-primary" /> Category: {product.category.name}</Card.Text>
+                    <Card.Text><FaTags className="text-primary" /> Category: {product.category?.name}</Card.Text>
                     <Card.Text><FaDollarSign className="text-success" /> Price: <strong>${product.price}</strong></Card.Text>
                     <Card.Text><FaBox className="text-warning" /> Available Stock: {product.quantity}</Card.Text>
                     <Card.Text><FaCheckCircle className="text-success" /> Status: {product.status}</Card.Text>
-                    <Button 
-                      variant="success" 
-                      className="w-100"
-                      onClick={() => addToCart(product)}
-                      disabled={product.quantity === 0}
-                    >
-                      <FaShoppingCart className="me-2" />
-                      Add to Cart
-                    </Button>
+                    <div className="d-flex gap-2">
+                      <Button 
+                        variant="primary" 
+                        className="flex-grow-1" 
+                        onClick={() => handleOrderClick(product)}
+                      >
+                        <FaShoppingCart /> Order Now
+                      </Button>
+                      <Button 
+                        variant="success" 
+                        onClick={() => addToCart(product)}
+                        disabled={product.quantity <= 0}
+                      >
+                        <FaCartPlus />
+                      </Button>
+                    </div>
                   </Card.Body>
                 </Card>
               </Col>
@@ -182,7 +208,11 @@ const InStockProducts = () => {
       {totalPages > 1 && (
         <Pagination className="justify-content-center">
           {Array.from({ length: totalPages }, (_, index) => (
-            <Pagination.Item key={index + 1} active={index + 1 === currentPage} onClick={() => handlePageChange(index + 1)}>
+            <Pagination.Item 
+              key={index + 1} 
+              active={index + 1 === currentPage} 
+              onClick={() => handlePageChange(index + 1)}
+            >
               {index + 1}
             </Pagination.Item>
           ))}
@@ -198,18 +228,33 @@ const InStockProducts = () => {
           <Form>
             <Form.Group className="mb-3">
               <Form.Label><FaBox className="text-warning" /> Quantity</Form.Label>
-              <Form.Control type="number" min="1" max={selectedProduct?.quantity} value={orderData.quantity} onChange={(e) => setOrderData({ ...orderData, quantity: e.target.value })} />
+              <Form.Control 
+                type="number" 
+                min="1" 
+                max={selectedProduct?.quantity} 
+                value={orderData.quantity} 
+                onChange={(e) => setOrderData({ ...orderData, quantity: e.target.value })} 
+              />
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label><FaPhone className="text-primary" /> Phone Number</Form.Label>
-              <Form.Control type="text" placeholder="Enter your phone number" value={orderData.phone} onChange={(e) => setOrderData({ ...orderData, phone: e.target.value })} />
+              <Form.Control 
+                type="text" 
+                placeholder="Enter your phone number" 
+                value={orderData.phone} 
+                onChange={(e) => setOrderData({ ...orderData, phone: e.target.value })} 
+              />
             </Form.Group>
-            {/* Display Total Amount */}
             <Form.Group className="mb-3">
               <Form.Label><FaDollarSign className="text-success" /> Total Amount</Form.Label>
               <Form.Control type="text" value={`$${totalAmount}`} readOnly />
             </Form.Group>
-            <Button variant="success" onClick={handleOrderSubmit} className="w-100" disabled={loading}>
+            <Button 
+              variant="success" 
+              onClick={handleOrderSubmit} 
+              className="w-100" 
+              disabled={loading}
+            >
               {loading ? (
                 <>
                   <Spinner animation="border" size="sm" className="mr-2" />

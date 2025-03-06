@@ -4,6 +4,7 @@ const users = db["Users"];
 const Products = db["Products"];
 const Notifications = db["Notifications"];
 const Categories = db["Categories"];
+const { Op } = require("sequelize");
 
 export const getuserproduct = async (userID) => {
   try {
@@ -124,14 +125,30 @@ export const outstock = async (userID) => {
 
 export const instock = async (userID) => {
   try {
+    // First, let's check all products in the database
+    const allProducts = await Products.findAll({
+      include: [
+        {
+          model: Categories,
+          as: "category",
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+    
+    console.log("All products in database:", allProducts.length);
+    console.log("All product statuses:", allProducts.map(p => p.status));
+
     const whereClause = {
-      status: "In Stock"
+      status: "In Stock"  // Only look for exact match "In Stock"
     };
 
     // If userID is provided, add it to the where clause
     if (userID) {
       whereClause.userID = userID;
     }
+
+    console.log("Fetching products with where clause:", whereClause);
 
     const Info = await Products.findAll({
       where: whereClause,
@@ -144,6 +161,8 @@ export const instock = async (userID) => {
       order: [['createdAt', 'DESC']] // Sort by newest first
     });
 
+    console.log("Found in-stock products:", Info.length);
+    console.log("Product statuses:", Info.map(p => p.status));
     return Info;
   } catch (error) {
     console.error("Error fetching in stock products:", error);
@@ -246,13 +265,52 @@ export const updateOne = async (id, data) => {
   }
 };
 
-export const status_change = async (id,status) => {
-  const restoToUpdate = await Products.findOne({ where: { id } });
-  if (restoToUpdate) {
-   const updatedone= await Products.update({ status: status }, { where: { id } });
-    return updatedone;
+export const status_change = async (id, status) => {
+  try {
+    const productToUpdate = await Products.findOne({ where: { id } });
+    if (!productToUpdate) {
+      return null;
+    }
+
+    await Products.update({ status: status }, { where: { id } });
+    
+    // Fetch and return the updated product with its category
+    const updatedProduct = await Products.findByPk(id, {
+      include: [
+        {
+          model: Categories,
+          as: "category",
+        }
+      ]
+    });
+
+    return updatedProduct;
+  } catch (error) {
+    console.error("Error in status_change:", error);
+    throw error;
   }
-  return null;
+};
+
+export const getPendingProducts = async () => {
+  try {
+    const products = await Products.findAll({
+      where: {
+        status: "Pending Approval"
+      },
+      include: [
+        {
+          model: users,
+          attributes: ["id", "firstName", "lastName", "email", "phoneNumber"]
+        }
+      ]
+    });
+
+    console.log('Found pending products:', products.length);
+    return products;
+  } catch (error) {
+    console.error('Error in getPendingProducts service:', error);
+    throw error;
+  }
 };
 
 

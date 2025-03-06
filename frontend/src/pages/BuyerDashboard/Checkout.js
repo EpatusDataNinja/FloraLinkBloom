@@ -303,7 +303,11 @@ const Checkout = ({ setShowMainSidebar }) => {
               {cartItems.map((item) => (
                 <Row key={item.id} className="mb-3 align-items-center">
                   <Col md={2}>
-                    <img src={item.image} alt={item.name} className="img-fluid rounded" />
+                    <img 
+                      src={`${process.env.REACT_APP_BASE_URL}${item.image}`} 
+                      alt={item.name} 
+                      className="img-fluid rounded" 
+                    />
                   </Col>
                   <Col md={4}>
                     <h6 className="mb-0">{item.name}</h6>
@@ -367,9 +371,18 @@ const Checkout = ({ setShowMainSidebar }) => {
               <h5 className="mb-4">Order Summary</h5>
               {cartItems.map((item) => (
                 <div key={item.id} className="mb-3">
-                  <div className="d-flex justify-content-between">
-                    <span>{item.name} x {item.quantity}</span>
-                    <span>${(item.price * item.quantity).toFixed(2)}</span>
+                  <div className="d-flex align-items-center">
+                    <img 
+                      src={`${process.env.REACT_APP_BASE_URL}${item.image}`} 
+                      alt={item.name} 
+                      style={{ width: '50px', height: '50px', objectFit: 'cover', marginRight: '10px' }} 
+                    />
+                    <div>
+                      <div className="d-flex justify-content-between">
+                        <span>{item.name} x {item.quantity}</span>
+                        <span>${(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}

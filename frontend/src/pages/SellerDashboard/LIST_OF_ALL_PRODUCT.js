@@ -141,7 +141,7 @@ const ProductPanel = () => {
     const product = outOfStock.find(p => p.id === productId);
     if (product) {
       setOutOfStock(prev => prev.filter(p => p.id !== productId));
-      setInStock(prev => [...prev, { ...product, status: 'in stock' }]);
+      setInStock(prev => [...prev, { ...product, status: 'In Stock' }]);
     }
   };
 
@@ -149,7 +149,7 @@ const ProductPanel = () => {
     const product = inStock.find(p => p.id === productId);
     if (product) {
       setInStock(prev => prev.filter(p => p.id !== productId));
-      setOutOfStock(prev => [...prev, { ...product, status: 'out of stock' }]);
+      setOutOfStock(prev => [...prev, { ...product, status: 'Out of Stock' }]);
     }
   };
 
@@ -159,57 +159,45 @@ const ProductPanel = () => {
       return;
     }
 
-    const quantity = parseInt(newQuantity);
-    if (isNaN(quantity) || quantity < 0) {
-      toast.error("Please enter a valid non-negative quantity");
-      return;
-    }
-
     try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        toast.error("Authentication required. Please login again.");
-        return;
-      }
-
       setLoading(true);
-
-      // Create update payload
-      const updatePayload = {
-        name: selectedProduct.name,
-        description: selectedProduct.description,
-        price: selectedProduct.price,
-        quantity: quantity,
-        categoryID: selectedProduct.category?.id || selectedProduct.categoryID,
-        status: selectedProduct.status, // Keep the existing status
-        image: selectedProduct.image
-      };
-
-      const response = await axios({
-        method: 'PUT',
-        url: `${process.env.REACT_APP_BASE_URL}/api/v1/product/update/${selectedProduct.id}`,
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+      const token = localStorage.getItem('token');
+      const response = await axios.put(
+        `${process.env.REACT_APP_BASE_URL}/api/v1/product/update/${selectedProduct.id}`,
+        {
+          quantity: parseInt(newQuantity),
+          status: parseInt(newQuantity) > 0 ? 'In Stock' : 'Out of Stock'
         },
-        data: updatePayload
-      });
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
 
       if (response.data.success) {
-        toast.success("Stock quantity updated successfully!");
+        // Update local state
+        setInStock(prev =>
+          prev.map(product =>
+            product.id === selectedProduct.id
+              ? { ...product, quantity: parseInt(newQuantity), status: parseInt(newQuantity) > 0 ? 'In Stock' : 'Out of Stock' }
+              : product
+          )
+        );
+        setOutOfStock(prev =>
+          prev.map(product =>
+            product.id === selectedProduct.id
+              ? { ...product, quantity: parseInt(newQuantity), status: parseInt(newQuantity) > 0 ? 'In Stock' : 'Out of Stock' }
+              : product
+          )
+        );
+        toast.success("Product updated successfully");
         setShowUpdateModal(false);
-        
-        // Refresh both lists to get the latest data
-        await Promise.all([
-          fetchInStockProducts(),
-          fetchOutOfStock()
-        ]);
+        setNewQuantity("");
       } else {
-        throw new Error(response.data.message || "Update failed");
+        toast.error(response.data.message || "Failed to update product");
       }
     } catch (error) {
-      console.error('Update error:', error);
-      toast.error(error.response?.data?.message || error.message || "Failed to update stock");
+      console.error("Error updating product:", error);
+      toast.error(error.response?.data?.message || "Failed to update product");
     } finally {
       setLoading(false);
     }

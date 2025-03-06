@@ -20,6 +20,7 @@ const Sidebar = ({ show, setShow }) => {
     { name: "Overview", icon: <FaTachometerAlt />, to: "/admin/overview" },
     { name: "Users management", icon: <FaUsers />, to: "/dashboard/users" },
     { name: "Orders", icon: <FaBox />, to: "/admin/orders" },
+    { name: "Pending Products", icon: <FaBox />, to: "/admin/pending_products" },
     { name: "Products modelation", icon: <FaBox />, to: "/admin/moderate_product" },
     { name: "Products list", icon: <FaBox />, to: "/product_list" },
     { name: "Notifications", icon: <FaBell />, to: "/notifications" },

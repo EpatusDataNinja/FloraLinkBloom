@@ -12,8 +12,8 @@ import {
   instock,
   outstock,
   getuserproduct,
-  getOneProduct
-
+  getOneProduct,
+  getPendingProducts
 } from "../services/ProductService.js";
 import Email from "../utils/mailer.js";
 
@@ -194,19 +194,24 @@ export const activateProductsController = async (req, res) => {
     });
 
     // Update the product status to "In Stock"
-    let status = "In Stock";
-    const product = await status_change(id, status);
-    if (!product) {
+    const updatedProduct = await status_change(id, "In Stock");
+    if (!updatedProduct) {
       return res.status(404).json({
         success: false,
         message: "Product status update failed",
       });
     }
 
+    // Construct full image URL for response
+    const responseData = {
+      ...updatedProduct.toJSON(),
+      image: updatedProduct.image ? `${process.env.BASE_URL}${updatedProduct.image}` : null
+    };
+
     return res.status(200).json({
       success: true,
       message: "Product activated successfully and status updated to 'In Stock'",
-      product,
+      data: responseData
     });
   } catch (error) {
     console.error(error);
@@ -635,6 +640,34 @@ export const updateOne_controller = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to update product",
+      error: error.message
+    });
+  }
+};
+
+export const getPendingProductsController = async (req, res) => {
+  try {
+    const userID = req.user.id;
+    let role = req.user.role;
+
+    // Check if the user is an admin
+    if (role !== "admin") {
+      return res.status(400).json({
+        success: false,
+        message: "You are not allowed to view pending products",
+      });
+    }
+
+    const products = await getPendingProducts();
+    return res.status(200).json({
+      success: true,
+      data: products
+    });
+  } catch (error) {
+    console.error('Error in getPendingProductsController:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch pending products',
       error: error.message
     });
   }

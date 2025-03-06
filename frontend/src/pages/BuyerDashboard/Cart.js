@@ -235,7 +235,12 @@ const Cart = () => {
                     <Row className="align-items-center">
                       <Col md={2}>
                         <div className="product-image-container">
-                          <Image src={item.image} alt={item.name} fluid className="rounded" />
+                          <Image 
+                            src={`${process.env.REACT_APP_BASE_URL}${item.image}`} 
+                            alt={item.name} 
+                            fluid 
+                            className="rounded" 
+                          />
                         </div>
                       </Col>
                       <Col md={4}>

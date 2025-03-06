@@ -43,6 +43,7 @@ import BuyerOverView from './pages/BuyerDashboard/SellerDashboard_Page';
 import Chat from './pages/BuyerDashboard/ChatPage';
 import SalesReport from './pages/SellerDashboard/SalesReportPage';
 import ProductCategories from './pages/SellerDashboard/ProductCategoryPage';
+import PendingProducts from './pages/AdminDashboard/PendingProducts';
 
 
 
@@ -104,6 +105,7 @@ function App() {
         <Route path="/product/categories" element={<ProductCategories/>} /> 
         <Route path="/dashboard/seller/add-product" element={<AddProduct />} />
         <Route path="/dashboard/seller/products" element={<GeneralProductList />} />
+        <Route path="/admin/pending_products" element={<PendingProducts />} />
       </Routes>
     </BrowserRouter>
   );
