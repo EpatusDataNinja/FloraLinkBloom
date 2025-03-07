@@ -179,35 +179,61 @@ const Checkout = ({ setShowMainSidebar }) => {
     try {
       const token = localStorage.getItem("token");
       
-      // Create orders for each cart item
-      for (const item of cartItems) {
-        await axios.post(
-          `${process.env.REACT_APP_BASE_URL}/api/v1/order/add`,
-          {
-            productID: item.id,
-            quantity: item.quantity,
-            number: userProfile.phone,
-            shippingAddress: userProfile.address
-          },
-          {
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        );
-      }
+      // Prepare order details and payment data
+      const orderDetails = cartItems.map(item => ({
+        productID: item.id,
+        quantity: item.quantity,
+        number: userProfile.phone,
+        shippingAddress: userProfile.address,
+        price: item.price // Include the price in order details
+      }));
 
-      // Clear cart after successful order
-      localStorage.removeItem("cart");
-      toast.success("Orders placed successfully!");
-      
-      // Redirect to orders page after a short delay
-      setTimeout(() => {
-        navigate("/buyer/orders");
-      }, 2000);
+      const paymentData = {
+        amount: calculateTotal(),
+        number: userProfile.phone,
+        items: cartItems.map(item => ({
+          productId: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          image: item.image
+        })),
+        orderDetails
+      };
+
+      console.log("Sending payment request:", paymentData);
+
+      const paymentResponse = await axios.post(
+        `${process.env.REACT_APP_BASE_URL}/api/v1/payment/process-cart`,
+        paymentData,
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log("Payment response:", paymentResponse.data);
+
+      if (paymentResponse.data.success) {
+        // Clear cart and show success message
+        localStorage.removeItem("cart");
+        toast.success("Payment successful and orders placed!");
+        
+        // Close the sidebar and redirect
+        setShowSidebar(false);
+        setTimeout(() => {
+          navigate("/buyer/orders");
+        }, 2000);
+      } else {
+        throw new Error(paymentResponse.data.message || "Payment failed");
+      }
     } catch (error) {
-      toast.error("Error placing orders: " + error.message);
+      console.error("Payment error:", error);
+      toast.error(error.response?.data?.message || error.message || "Payment processing failed");
     } finally {
       setProcessing(false);
-      setShowSidebar(false);
     }
   };
 
