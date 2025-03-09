@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Table, Button, Modal, Spinner, Form } from "react-bootstrap";
 import moment from "moment";
 import Title from "../../components_part/TitleCard";
+
 const PaymentsTable = () => {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,71 +63,98 @@ const PaymentsTable = () => {
   }
 
   return (
-    <div className="container mt-5">
-            <Title title={'Payments'}/>
+    <div className="payments-section">
+      <Title title={'Payments'} />
+      <div className="content-section">
+        {/* Filters and Sorting */}
+        <div className="filters-row mb-4">
+          <Form.Select 
+            value={filterStatus} 
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="filter-select"
+          >
+            <option value="">All Status</option>
+            <option value="paid">Paid</option>
+            <option value="refunded">Refunded</option>
+          </Form.Select>
+          <Form.Select 
+            value={sortField} 
+            onChange={(e) => setSortField(e.target.value)}
+            className="filter-select"
+          >
+            <option value="createdAt">Date</option>
+            <option value="amount">Amount</option>
+            <option value="payer.firstname">Payer Name</option>
+          </Form.Select>
+          <Form.Select 
+            value={sortOrder} 
+            onChange={(e) => setSortOrder(e.target.value)}
+            className="filter-select"
+          >
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </Form.Select>
+        </div>
 
-      {/* Filters and Sorting */}
-      <div className="d-flex justify-content-between mb-3">
-        <Form.Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-          <option value="">All Status</option>
-          <option value="paid">Paid</option>
-          <option value="refunded">Refunded</option>
-        </Form.Select>
-        <Form.Select value={sortField} onChange={(e) => setSortField(e.target.value)}>
-          <option value="createdAt">Date</option>
-          <option value="amount">Amount</option>
-          <option value="payer.firstname">Payer Name</option>
-        </Form.Select>
-        <Form.Select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
-          <option value="asc">Ascending</option>
-          <option value="desc">Descending</option>
-        </Form.Select>
-      </div>
+        {/* Table */}
+        <div className="table-responsive">
+          <Table striped bordered hover>
+            <thead className="bg-light">
+              <tr>
+                <th>ID</th>
+                <th>Payer</th>
+                <th>Order ID</th>
+                <th>Amount ($)</th>
+                <th>Payment Method</th>
+                <th>Status</th>
+                <th>Product</th>
+                <th>Created At</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentPayments.map((payment) => (
+                <tr key={payment.id}>
+                  <td>{payment.id}</td>
+                  <td>{payment.payer.firstname} {payment.payer.lastname} ({payment.payer.email})</td>
+                  <td>{payment.orderID}</td>
+                  <td>{payment.amount}</td>
+                  <td>{payment.paymentMethod}</td>
+                  <td className={payment.status === "paid" ? "text-success" : "text-danger"}>{payment.status}</td>
+                  <td>{payment.order?.product?.name}</td>
+                  <td>{moment(payment.createdAt).format("YYYY-MM-DD HH:mm")}</td>
+                  <td>
+                    <Button variant="primary" onClick={() => {
+                      setSelectedPayment(payment);
+                      setShowModal(true);
+                    }}>
+                      View
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
 
-      {/* Table */}
-      <Table striped bordered hover responsive>
-        <thead className="bg-light">
-          <tr>
-            <th>ID</th>
-            <th>Payer</th>
-            <th>Order ID</th>
-            <th>Amount ($)</th>
-            <th>Payment Method</th>
-            <th>Status</th>
-            <th>Product</th>
-            <th>Created At</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {currentPayments.map((payment) => (
-            <tr key={payment.id}>
-              <td>{payment.id}</td>
-              <td>{payment.payer.firstname} {payment.payer.lastname} ({payment.payer.email})</td>
-              <td>{payment.orderID}</td>
-              <td>{payment.amount}</td>
-              <td>{payment.paymentMethod}</td>
-              <td className={payment.status === "paid" ? "text-success" : "text-danger"}>{payment.status}</td>
-              <td>{payment.order?.product?.name}</td>
-              <td>{moment(payment.createdAt).format("YYYY-MM-DD HH:mm")}</td>
-              <td>
-                <Button variant="primary" onClick={() => {
-                  setSelectedPayment(payment);
-                  setShowModal(true);
-                }}>
-                  View
-                </Button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-
-      {/* Pagination */}
-      <div className="d-flex justify-content-center">
-        <Button disabled={currentPage === 1} onClick={() => setCurrentPage(currentPage - 1)}>Prev</Button>
-        <span className="mx-3">Page {currentPage} of {totalPages}</span>
-        <Button disabled={currentPage === totalPages} onClick={() => setCurrentPage(currentPage + 1)}>Next</Button>
+        {/* Pagination */}
+        <div className="pagination-section mt-4">
+          <Button 
+            variant="outline-primary"
+            disabled={currentPage === 1} 
+            onClick={() => setCurrentPage(currentPage - 1)}
+          >
+            Prev
+          </Button>
+          <span className="mx-3">Page {currentPage} of {totalPages}</span>
+          <Button 
+            variant="outline-primary"
+            disabled={currentPage === totalPages} 
+            onClick={() => setCurrentPage(currentPage + 1)}
+          >
+            Next
+          </Button>
+        </div>
       </div>
           
       {/* Payment Details Modal */}
@@ -161,6 +189,51 @@ const PaymentsTable = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      <style jsx="true">{`
+        .payments-section {
+          width: 100%;
+        }
+
+        .content-section {
+          background: white;
+          padding: 2rem;
+          border-radius: 8px;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .filters-row {
+          display: flex;
+          gap: 1rem;
+          flex-wrap: wrap;
+        }
+
+        .filter-select {
+          flex: 1;
+          min-width: 200px;
+        }
+
+        .pagination-section {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+          .content-section {
+            padding: 1rem;
+          }
+
+          .filters-row {
+            flex-direction: column;
+          }
+
+          .filter-select {
+            width: 100%;
+          }
+        }
+      `}</style>
     </div>
   );
 };

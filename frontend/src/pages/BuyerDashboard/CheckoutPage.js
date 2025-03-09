@@ -1,45 +1,54 @@
 import React, { useState } from "react";
-import { Container, Row, Col } from "react-bootstrap";
+import "bootstrap/dist/css/bootstrap.min.css";
 import Header from "../../components_part/header";
 import Sidebar from "../../components_part/DashboardSidebar";
 import Checkout from "./Checkout";
 
 const CheckoutPage = () => {
-  const [showSidebar, setShowSidebar] = useState(false);
-
-  const toggleSidebar = () => {
-    setShowSidebar(!showSidebar);
-  };
+  const [show, setShow] = useState(false);
 
   return (
-    <div className="dashboard-container">
-      <Header toggleSidebar={toggleSidebar} />
-      <div className="d-flex">
-        <Sidebar show={showSidebar} setShow={setShowSidebar} />
-        <main className={`dashboard-main ${showSidebar ? "" : "expanded"}`}>
-          <Container fluid className="py-4">
-            <Row>
-              <Col>
-                <Checkout setShowMainSidebar={setShowSidebar} />
-              </Col>
-            </Row>
-          </Container>
-        </main>
+    <div className="dashboard-layout">
+      <Header setShow={setShow} />
+      <div className="dashboard-container">
+        <Sidebar show={show} setShow={setShow} />
+        <div className="dashboard-main">
+          <div className="dashboard-content">
+            <Checkout setShowMainSidebar={setShow} />
+          </div>
+        </div>
       </div>
 
       <style jsx="true">{`
-        .dashboard-container {
+        .dashboard-layout {
           min-height: 100vh;
-          background-color: #f8f9fa;
+          background-color: whitesmoke;
         }
+
+        .dashboard-container {
+          display: flex;
+          min-height: calc(100vh - 70px);
+          margin-top: 70px;
+        }
+
         .dashboard-main {
-          flex-grow: 1;
-          transition: margin-left 0.3s ease-in-out;
-          margin-left: ${showSidebar ? "250px" : "0"};
-          min-height: calc(100vh - 60px);
+          flex: 1;
+          margin-left: 280px;
+          padding: 2rem;
+          transition: margin-left 0.3s ease;
         }
-        .dashboard-main.expanded {
-          margin-left: 0;
+
+        .dashboard-content {
+          max-width: 1200px;
+          margin: 0 auto;
+        }
+
+        @media (max-width: 768px) {
+          .dashboard-main {
+            margin-left: 0;
+            width: 100%;
+            padding: 1rem;
+          }
         }
       `}</style>
     </div>

@@ -3,9 +3,11 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import axios from "axios";
 import { Table, Input, Button, Pagination } from "antd";
+import { Row, Col } from "react-bootstrap";
 import Title from "../../components_part/TitleCard";
+
 const API_URL = `${process.env.REACT_APP_BASE_URL}/api/v1/categories`;
-const TOKEN =  localStorage.getItem("token");
+const TOKEN = localStorage.getItem("token");
 
 const Categories = () => {
   const [categories, setCategories] = useState([]);
@@ -77,52 +79,148 @@ const Categories = () => {
   );
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-            <Title title={'Product category/type management'}/>
-      <div className="mb-4 flex gap-2">
-        <Input
-          placeholder="Enter category name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          style={{width:'50%'}}
-        />
-        <Button type="primary" style={{margin:'0.2cm'}} onClick={handleAddOrEdit}>
-          {editId ? "Update" : "Add"} Category
-        </Button>
-      </div>
-      <Input
-        placeholder="Search categories..."
-        className="mb-4"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{width:'50%'}}
-      />
-      <Table
-        loading={loading}
-        dataSource={paginatedCategories}
-        rowKey="id"
-        columns={[
-          { title: "ID", dataIndex: "id", key: "id" },
-          { title: "Name", dataIndex: "name", key: "name" },
-          {
-            title: "Actions",
-            render: (_, record) => (
-              <div className="flex gap-2">
-                <Button onClick={() => { setName(record.name); setEditId(record.id); }}>Edit</Button>
-                <Button danger onClick={() => handleDelete(record.id)}>Delete</Button>
+    <div className="content-wrapper">
+      <Title title="Product Categories" />
+      <Row className="g-4 mb-4">
+        <Col xs={12}>
+          <div className="content-card">
+            <div className="actions-row">
+              <div className="input-group">
+                <Input
+                  placeholder="Enter category name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="category-input"
+                />
+                <Button type="primary" onClick={handleAddOrEdit}>
+                  {editId ? "Update" : "Add"} Category
+                </Button>
               </div>
-            ),
-          },
-        ]}
-        pagination={false}
-      />
-      <Pagination
-        current={currentPage}
-        pageSize={pageSize}
-        total={filteredCategories.length}
-        onChange={setCurrentPage}
-        className="mt-4"
-      />
+              
+              <Input
+                placeholder="Search categories..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="search-input"
+              />
+            </div>
+
+            <div className="table-container">
+              <Table
+                loading={loading}
+                dataSource={paginatedCategories}
+                rowKey="id"
+                columns={[
+                  { title: "ID", dataIndex: "id", key: "id" },
+                  { title: "Name", dataIndex: "name", key: "name" },
+                  {
+                    title: "Actions",
+                    key: "actions",
+                    render: (_, record) => (
+                      <div className="action-buttons">
+                        <Button onClick={() => { setName(record.name); setEditId(record.id); }}>
+                          Edit
+                        </Button>
+                        <Button danger onClick={() => handleDelete(record.id)}>
+                          Delete
+                        </Button>
+                      </div>
+                    ),
+                  },
+                ]}
+                pagination={false}
+              />
+            </div>
+
+            <div className="pagination-wrapper">
+              <Pagination
+                current={currentPage}
+                pageSize={pageSize}
+                total={filteredCategories.length}
+                onChange={setCurrentPage}
+              />
+            </div>
+          </div>
+        </Col>
+      </Row>
+
+      <style jsx="true">{`
+        .content-wrapper {
+          padding: 20px;
+          background: #f8f9fa;
+        }
+
+        .content-card {
+          background: white;
+          border-radius: 8px;
+          padding: 2rem;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .actions-row {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          margin-bottom: 2rem;
+        }
+
+        .input-group {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          flex: 2;
+        }
+
+        .category-input {
+          flex: 1;
+        }
+
+        .search-input {
+          flex: 1;
+        }
+
+        .table-container {
+          margin-bottom: 2rem;
+          width: 100%;
+        }
+
+        .action-buttons {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .pagination-wrapper {
+          display: flex;
+          justify-content: flex-end;
+          padding-top: 1rem;
+          border-top: 1px solid #eee;
+        }
+
+        @media (max-width: 768px) {
+          .content-wrapper {
+            padding: 15px;
+          }
+
+          .content-card {
+            padding: 1rem;
+          }
+
+          .actions-row {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .input-group {
+            flex-direction: column;
+            width: 100%;
+          }
+
+          .category-input,
+          .search-input {
+            width: 100%;
+          }
+        }
+      `}</style>
     </div>
   );
 };

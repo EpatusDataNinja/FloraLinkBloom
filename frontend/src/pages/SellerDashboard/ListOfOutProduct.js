@@ -93,86 +93,110 @@ const ProductsPage = () => {
   };
 
   return (
-    <Container className="mt-5">
-
+    <div className="content-wrapper">
       <Title title={'Out of Stock Products'}/>
-
-      {loading ? (
-        <div className="d-flex justify-content-center">
-          <Spinner animation="border" />
-        </div>
-      ) : (
-        <>
-          <Row>
-            {products.length > 0 ? (
-              products.map((product) => (
-                <Col md={4} sm={6} key={product.id} className="mb-4">
-                  <Card className="shadow-sm">
-                    <Card.Img
-                      variant="top"
-                      src={product.image}
-                      alt={product.name}
-                      style={{ height: "200px", objectFit: "cover" }}
-                    />
-                    <Card.Body>
-                      <Card.Title>{product.name}</Card.Title>
-                      <Card.Subtitle className="mb-2 text-muted">
-                        <FontAwesomeIcon icon={faShoppingBag} /> {product.category.name}
-                      </Card.Subtitle>
-                      <Card.Text>{product.description}</Card.Text>
-                      <Card.Text>
-                        <strong>Price:</strong> ${product.price}
-                      </Card.Text>
-                      <Card.Text>
-                        <strong>Status:</strong> <span className="text-danger">{product.status}</span>
-                      </Card.Text>
-                      <Button 
-                        variant="primary" 
-                        className="mb-2 w-100"
-                        onClick={() => handleEditProduct(product)}
-                      >
-                        Edit Product
-                      </Button>
-                      <Button variant="outline-primary" disabled className="w-100">
-                        <FontAwesomeIcon icon={faExclamationTriangle} /> Notify Me When Available
-                      </Button>
-                    </Card.Body>
-                  </Card>
-                </Col>
-              ))
-            ) : (
-              <div className="text-center">
-                <FontAwesomeIcon icon={faExclamationTriangle} size="2x" className="text-warning" />
-                <p>No out-of-stock products available.</p>
-              </div>
-            )}
-          </Row>
-
-          {/* Pagination */}
-          <div className="d-flex justify-content-center mt-4">
-            <ReactPaginate
-              previousLabel={"Previous"}
-              nextLabel={"Next"}
-              breakLabel={"..."}
-              pageCount={pageCount}
-              marginPagesDisplayed={2}
-              pageRangeDisplayed={5}
-              onPageChange={handlePageChange}
-              containerClassName={"pagination"}
-              activeClassName={"active"}
-              pageClassName={"page-item"}
-              pageLinkClassName={"page-link"}
-              previousClassName={"page-item"}
-              previousLinkClassName={"page-link"}
-              nextClassName={"page-item"}
-              nextLinkClassName={"page-link"}
-            />
+      <div className="content-card">
+        {loading ? (
+          <div className="d-flex justify-content-center">
+            <Spinner animation="border" />
           </div>
-        </>
-      )}
+        ) : (
+          <>
+            <Row>
+              {products.length > 0 ? (
+                products.map((product) => (
+                  <Col md={4} sm={6} key={product.id} className="mb-4">
+                    <Card className="shadow-sm">
+                      <Card.Img
+                        variant="top"
+                        src={product.image}
+                        alt={product.name}
+                        style={{ height: "200px", objectFit: "cover" }}
+                      />
+                      <Card.Body>
+                        <Card.Title>{product.name}</Card.Title>
+                        <Card.Subtitle className="mb-2 text-muted">
+                          <FontAwesomeIcon icon={faShoppingBag} /> {product.category.name}
+                        </Card.Subtitle>
+                        <Card.Text>{product.description}</Card.Text>
+                        <Card.Text>
+                          <strong>Price:</strong> ${product.price}
+                        </Card.Text>
+                        <Card.Text>
+                          <strong>Status:</strong> <span className="text-danger">{product.status}</span>
+                        </Card.Text>
+                        <Button 
+                          variant="primary" 
+                          className="mb-2 w-100"
+                          onClick={() => handleEditProduct(product)}
+                        >
+                          Edit Product
+                        </Button>
+                        <Button variant="outline-primary" disabled className="w-100">
+                          <FontAwesomeIcon icon={faExclamationTriangle} /> Notify Me When Available
+                        </Button>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                ))
+              ) : (
+                <div className="text-center">
+                  <FontAwesomeIcon icon={faExclamationTriangle} size="2x" className="text-warning" />
+                  <p>No out-of-stock products available.</p>
+                </div>
+              )}
+            </Row>
+
+            {/* Pagination */}
+            <div className="d-flex justify-content-center mt-4">
+              <ReactPaginate
+                previousLabel={"Previous"}
+                nextLabel={"Next"}
+                breakLabel={"..."}
+                pageCount={pageCount}
+                marginPagesDisplayed={2}
+                pageRangeDisplayed={5}
+                onPageChange={handlePageChange}
+                containerClassName={"pagination"}
+                activeClassName={"active"}
+                pageClassName={"page-item"}
+                pageLinkClassName={"page-link"}
+                previousClassName={"page-item"}
+                previousLinkClassName={"page-link"}
+                nextClassName={"page-item"}
+                nextLinkClassName={"page-link"}
+              />
+            </div>
+          </>
+        )}
+      </div>
 
       <ToastContainer />
-    </Container>
+
+      <style jsx="true">{`
+        .content-wrapper {
+          padding: 20px;
+          background: #f8f9fa;
+        }
+
+        .content-card {
+          background: white;
+          border-radius: 8px;
+          padding: 2rem;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        @media (max-width: 768px) {
+          .content-wrapper {
+            padding: 15px;
+          }
+
+          .content-card {
+            padding: 1rem;
+          }
+        }
+      `}</style>
+    </div>
   );
 };
 

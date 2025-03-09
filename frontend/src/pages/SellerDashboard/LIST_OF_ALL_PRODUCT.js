@@ -162,14 +162,27 @@ const ProductPanel = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
+      
+      // Create a complete product update payload
+      const updatePayload = {
+        name: selectedProduct.name,
+        categoryID: selectedProduct.category?.id || selectedProduct.categoryID,
+        description: selectedProduct.description,
+        price: selectedProduct.price,
+        quantity: parseInt(newQuantity),
+        status: parseInt(newQuantity) > 0 ? 'In Stock' : 'Out of Stock'
+      };
+
+      console.log('Update payload:', updatePayload); // Debug log
+
       const response = await axios.put(
         `${process.env.REACT_APP_BASE_URL}/api/v1/product/update/${selectedProduct.id}`,
+        updatePayload,
         {
-          quantity: parseInt(newQuantity),
-          status: parseInt(newQuantity) > 0 ? 'In Stock' : 'Out of Stock'
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         }
       );
 
@@ -230,7 +243,7 @@ const ProductPanel = () => {
   };
 
   // Modify the product card render to include quick update button
-  const renderProductCard = (product) => (
+  const renderProductCard = (product) =>
     <Col md={4} key={product.id}>
       <Card className="mb-4 shadow-lg">
         <Card.Img 
@@ -240,15 +253,20 @@ const ProductPanel = () => {
             e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
           }}
           alt={product.name}
+          style={{
+            height: "250px",
+            objectFit: "cover",
+            width: "100%"
+          }}
         />
-        <Card.Body>
-          <Card.Title>{product.name}</Card.Title>
-          <Card.Text>{product.description}</Card.Text>
-          <Card.Text>Price: ${product.price}</Card.Text>
-          <Card.Text>
+        <Card.Body style={{ height: "280px", overflow: "hidden" }}>
+          <Card.Title className="text-truncate">{product.name}</Card.Title>
+          <Card.Text style={{ height: "48px", overflow: "hidden" }}>{product.description}</Card.Text>
+          <Card.Text className="mb-2">Price: <strong className="text-success">${product.price}</strong></Card.Text>
+          <Card.Text className="mb-2">
             Stock: <strong>{product.quantity}</strong>
           </Card.Text>
-          <Card.Text>
+          <Card.Text className="mb-3">
             Status: <strong className={
               product.status === "In Stock" ? "text-success" :
               product.status === "Out of Stock" ? "text-danger" :
@@ -256,25 +274,25 @@ const ProductPanel = () => {
               "text-danger"
             }>{product.status}</strong>
           </Card.Text>
-          <Button 
-            variant="primary" 
-            className="mt-2 me-2"
-            onClick={() => handleEditProduct(product)}
-          >
-            Edit Product
-          </Button>
-          <Button 
-            variant="outline-primary" 
-            className="mt-2"
-            onClick={() => openUpdateModal(product)}
-            disabled={product.status === "rejected"}
-          >
-            Quick Update Stock
-          </Button>
+          <div className="d-flex gap-2 mt-auto">
+            <Button 
+              variant="primary" 
+              className="flex-grow-1"
+              onClick={() => handleEditProduct(product)}
+            >
+              Edit Product
+            </Button>
+            <Button 
+              variant="outline-primary" 
+              onClick={() => openUpdateModal(product)}
+              disabled={product.status === "rejected"}
+            >
+              Quick Update
+            </Button>
+          </div>
         </Card.Body>
       </Card>
     </Col>
-  );
 
   // Add a retry mechanism
   const handleRetry = () => {
@@ -292,154 +310,195 @@ const ProductPanel = () => {
   };
 
   return (
-    <Container>
-       <Title title={'List Products'}/>
+    <div className="content-wrapper">
+      <Title title={'List Products'}/>
+      <div className="content-card">
+        <Tab.Container defaultActiveKey="outofstock">
+          <Nav variant="pills" className="mb-4 justify-content-center">
+            <Nav.Item>
+              <Nav.Link eventKey="outofstock">Out of Stock ({outOfStock.length})</Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link eventKey="instock">In Stock ({inStock.length})</Nav.Link>
+            </Nav.Item>
+          </Nav>
 
-      <Tab.Container defaultActiveKey="outofstock">
-        <Nav variant="pills" className="mb-4 justify-content-center">
-          <Nav.Item>
-            <Nav.Link eventKey="outofstock">Out of Stock ({outOfStock.length})</Nav.Link>
-          </Nav.Item>
-          <Nav.Item>
-            <Nav.Link eventKey="instock">In Stock ({inStock.length})</Nav.Link>
-          </Nav.Item>
-        </Nav>
+          <Tab.Content>
+            {/* Out of Stock Products Panel */}
+            <Tab.Pane eventKey="outofstock">
+              {loading ? (
+                <div className="text-center">
+                  <Spinner animation="border" />
+                </div>
+              ) : (
+                <>
+                  <Row>
+                    {outOfStock.length > 0 ? (
+                      outOfStock.map((product) => renderProductCard(product))
+                    ) : (
+                      <NoDataCard 
+                        message="No out-of-stock products available." 
+                        icon={<FaBoxOpen />} 
+                      />
+                    )}
+                  </Row>
 
-        <Tab.Content>
-          {/* Out of Stock Products Panel */}
-          <Tab.Pane eventKey="outofstock">
-            {loading ? (
-              <div className="text-center">
-                <Spinner animation="border" />
-              </div>
-            ) : (
-              <>
-                <Row>
-                  {outOfStock.length > 0 ? (
-                    outOfStock.map((product) => renderProductCard(product))
-                  ) : (
-                    <NoDataCard 
-                      message="No out-of-stock products available." 
-                      icon={<FaBoxOpen />} 
-                    />
+                  {outOfStock.length > 0 && (
+                    <Pagination className="justify-content-center">
+                      {Array.from({ length: Math.ceil(outOfStock.length / productsPerPage) }, (_, index) => (
+                        <Pagination.Item 
+                          key={index + 1} 
+                          active={index + 1 === outCurrentPage} 
+                          onClick={() => handleOutPageChange(index + 1)}
+                        >
+                          {index + 1}
+                        </Pagination.Item>
+                      ))}
+                    </Pagination>
                   )}
-                </Row>
+                </>
+              )}
+            </Tab.Pane>
 
-                {outOfStock.length > 0 && (
-                  <Pagination className="justify-content-center">
-                    {Array.from({ length: Math.ceil(outOfStock.length / productsPerPage) }, (_, index) => (
-                      <Pagination.Item 
-                        key={index + 1} 
-                        active={index + 1 === outCurrentPage} 
-                        onClick={() => handleOutPageChange(index + 1)}
-                      >
-                        {index + 1}
-                      </Pagination.Item>
-                    ))}
-                  </Pagination>
-                )}
-              </>
-            )}
-          </Tab.Pane>
+            {/* In Stock Products Panel */}
+            <Tab.Pane eventKey="instock">
+              {loading ? (
+                <div className="text-center">
+                  <Spinner animation="border" />
+                </div>
+              ) : (
+                <>
+                  <Row>
+                    {inStock.length > 0 ? (
+                      inStock.map((product) => renderProductCard(product))
+                    ) : (
+                      <NoDataCard 
+                        message="No in-stock products available." 
+                        icon={<FaBoxOpen />} 
+                      />
+                    )}
+                  </Row>
 
-          {/* In Stock Products Panel */}
-          <Tab.Pane eventKey="instock">
-            {loading ? (
-              <div className="text-center">
-                <Spinner animation="border" />
-              </div>
-            ) : (
-              <>
-                <Row>
-                  {inStock.length > 0 ? (
-                    inStock.map((product) => renderProductCard(product))
-                  ) : (
-                    <NoDataCard 
-                      message="No in-stock products available." 
-                      icon={<FaBoxOpen />} 
-                    />
+                  {inStock.length > 0 && (
+                    <Pagination className="justify-content-center">
+                      {Array.from({ length: Math.ceil(inStock.length / productsPerPage) }, (_, index) => (
+                        <Pagination.Item 
+                          key={index + 1} 
+                          active={index + 1 === inCurrentPage} 
+                          onClick={() => handleInPageChange(index + 1)}
+                        >
+                          {index + 1}
+                        </Pagination.Item>
+                      ))}
+                    </Pagination>
                   )}
-                </Row>
+                </>
+              )}
+            </Tab.Pane>
+          </Tab.Content>
+        </Tab.Container>
 
-                {inStock.length > 0 && (
-                  <Pagination className="justify-content-center">
-                    {Array.from({ length: Math.ceil(inStock.length / productsPerPage) }, (_, index) => (
-                      <Pagination.Item 
-                        key={index + 1} 
-                        active={index + 1 === inCurrentPage} 
-                        onClick={() => handleInPageChange(index + 1)}
-                      >
-                        {index + 1}
-                      </Pagination.Item>
-                    ))}
-                  </Pagination>
-                )}
-              </>
-            )}
-          </Tab.Pane>
-        </Tab.Content>
-      </Tab.Container>
+        {/* Quick Update Modal */}
+        <Modal show={showUpdateModal} onHide={() => setShowUpdateModal(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Update Stock - {selectedProduct?.name}</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Form>
+              <Form.Group className="mb-3">
+                <Form.Label>Product Details</Form.Label>
+                <div className="border rounded p-3 bg-light">
+                  <p className="mb-2"><strong>Category:</strong> {selectedProduct?.category?.name}</p>
+                  <p className="mb-2"><strong>Price:</strong> ${selectedProduct?.price}</p>
+                  <p className="mb-2"><strong>Description:</strong> {selectedProduct?.description}</p>
+                </div>
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Current Stock</Form.Label>
+                <div className="d-flex align-items-center">
+                  <div className={`badge ${selectedProduct?.quantity > 0 ? 'bg-success' : 'bg-danger'} me-2`}>
+                    {selectedProduct?.quantity || 0} units
+                  </div>
+                  <span className="text-muted">
+                    ({selectedProduct?.quantity > 0 ? 'In Stock' : 'Out of Stock'})
+                  </span>
+                </div>
+              </Form.Group>
+              <Form.Group>
+                <Form.Label>New Stock Quantity</Form.Label>
+                <Form.Control
+                  type="number"
+                  min="0"
+                  value={newQuantity}
+                  onChange={(e) => setNewQuantity(e.target.value)}
+                  placeholder="Enter new quantity"
+                  isInvalid={newQuantity === "" || parseInt(newQuantity) < 0}
+                />
+                <Form.Text className="text-muted">
+                  Enter 0 or more units. The product status will automatically update based on the quantity.
+                </Form.Text>
+              </Form.Group>
+            </Form>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowUpdateModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="primary" 
+              onClick={handleQuickUpdate}
+              disabled={loading || newQuantity === "" || parseInt(newQuantity) < 0}
+            >
+              {loading ? (
+                <>
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Updating...
+                </>
+              ) : (
+                'Update Stock'
+              )}
+            </Button>
+          </Modal.Footer>
+        </Modal>
 
-      {/* Quick Update Modal */}
-      <Modal show={showUpdateModal} onHide={() => setShowUpdateModal(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>Update Stock</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form>
-            <Form.Group>
-              <Form.Label>Product Name</Form.Label>
-              <Form.Control type="text" value={selectedProduct?.name || ''} disabled />
-            </Form.Group>
-            <Form.Group className="mt-3">
-              <Form.Label>Current Stock: {selectedProduct?.quantity || 0}</Form.Label>
-              <Form.Control
-                type="number"
-                min="0"
-                value={newQuantity}
-                onChange={(e) => setNewQuantity(e.target.value)}
-                placeholder="Enter new quantity"
-              />
-            </Form.Group>
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowUpdateModal(false)}>
-            Cancel
-          </Button>
-          <Button 
-            variant="primary" 
-            onClick={handleQuickUpdate}
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <Spinner animation="border" size="sm" className="me-2" />
-                Updating...
-              </>
-            ) : (
-              'Update Stock'
-            )}
-          </Button>
-        </Modal.Footer>
-      </Modal>
+        <ToastContainer />
 
-      <ToastContainer />
+        {loading && <div>Loading...</div>}
+        
+        {error && (
+          <div className="alert alert-danger">
+            {error}
+            <button className="btn btn-link" onClick={handleRetry}>
+              Retry
+            </button>
+          </div>
+        )}
+      </div>
 
-      {loading && <div>Loading...</div>}
-      
-      {error && (
-        <div className="alert alert-danger">
-          {error}
-          <button 
-            className="btn btn-link"
-            onClick={handleRetry}
-          >
-            Retry
-          </button>
-        </div>
-      )}
-    </Container>
+      <style jsx="true">{`
+        .content-wrapper {
+          padding: 20px;
+          background: #f8f9fa;
+        }
+
+        .content-card {
+          background: white;
+          border-radius: 8px;
+          padding: 2rem;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        @media (max-width: 768px) {
+          .content-wrapper {
+            padding: 15px;
+          }
+
+          .content-card {
+            padding: 1rem;
+          }
+        }
+      `}</style>
+    </div>
   );
 };
 

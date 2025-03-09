@@ -5,7 +5,7 @@ import { Form, Button, Card, Row, Col, Spinner } from 'react-bootstrap';
 import 'react-toastify/dist/ReactToastify.css';
 import Title from "../../components_part/TitleCard";
 
-const AddProductForm = ({ editMode, productData }) => {
+const ProductForm = ({ editMode, productData }) => {
   const [product, setProduct] = useState({
     name: "",
     categoryID: "",
@@ -93,6 +93,11 @@ const AddProductForm = ({ editMode, productData }) => {
       formData.append("description", product.description.trim());
       formData.append("price", String(product.price));
       formData.append("quantity", String(product.quantity));
+      
+      // Set initial status for new products
+      if (!editMode) {
+        formData.append("status", "Pending Approval");
+      }
 
       // Handle image
       if (product.image instanceof File) {
@@ -232,139 +237,159 @@ const AddProductForm = ({ editMode, productData }) => {
   };
 
   return (
-    <div className="container mt-5">
-      <Card className="p-4">
-        <Card.Header className="text-center">
-          <Title title={editMode ? 'Update Product' : 'Add New Product'}/>
-        </Card.Header>
-        <Card.Body>
-          <Form onSubmit={handleSubmit} encType="multipart/form-data">
-            <Row>
-              <Col md={6} className="mb-3">
-                <Form.Group controlId="name">
-                  <Form.Label>Product Name</Form.Label>
-                  <Form.Control
-                    type="text"
-                    placeholder="Enter product name"
-                    name="name"
-                    value={product.name}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </Form.Group>
-              </Col>
+    <div className="content-wrapper">
+      <Title title={editMode ? "Edit Product" : "Add New Product"} />
+      <div className="content-card">
+        <Form onSubmit={handleSubmit} encType="multipart/form-data">
+          <Row>
+            <Col md={6} className="mb-3">
+              <Form.Group controlId="name">
+                <Form.Label>Product Name</Form.Label>
+                <Form.Control
+                  type="text"
+                  placeholder="Enter product name"
+                  name="name"
+                  value={product.name}
+                  onChange={handleInputChange}
+                  required
+                />
+              </Form.Group>
+            </Col>
 
-              <Col md={6} className="mb-3">
-                <Form.Group controlId="categoryID">
-                  <Form.Label>Category</Form.Label>
-                  <Form.Control
-                    as="select"
-                    name="categoryID"
-                    value={product.categoryID}
-                    onChange={handleInputChange}
-                    required
-                  >
-                    <option value="">Select a Category</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </Form.Control>
-                </Form.Group>
-              </Col>
-            </Row>
+            <Col md={6} className="mb-3">
+              <Form.Group controlId="categoryID">
+                <Form.Label>Category</Form.Label>
+                <Form.Control
+                  as="select"
+                  name="categoryID"
+                  value={product.categoryID}
+                  onChange={handleInputChange}
+                  required
+                >
+                  <option value="">Select a Category</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </Form.Control>
+              </Form.Group>
+            </Col>
+          </Row>
 
-            <Form.Group controlId="description" className="mb-3">
-              <Form.Label>Description</Form.Label>
-              <Form.Control
-                as="textarea"
-                placeholder="Enter product description"
-                name="description"
-                value={product.description}
-                onChange={handleInputChange}
-                required
-              />
-            </Form.Group>
+          <Form.Group controlId="description" className="mb-3">
+            <Form.Label>Description</Form.Label>
+            <Form.Control
+              as="textarea"
+              placeholder="Enter product description"
+              name="description"
+              value={product.description}
+              onChange={handleInputChange}
+              required
+            />
+          </Form.Group>
 
-            <Row>
-              <Col md={6} className="mb-3">
-                <Form.Group controlId="price">
-                  <Form.Label>Price</Form.Label>
-                  <Form.Control
-                    type="number"
-                    placeholder="Enter price"
-                    name="price"
-                    value={product.price}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </Form.Group>
-              </Col>
+          <Row>
+            <Col md={6} className="mb-3">
+              <Form.Group controlId="price">
+                <Form.Label>Price</Form.Label>
+                <Form.Control
+                  type="number"
+                  placeholder="Enter price"
+                  name="price"
+                  value={product.price}
+                  onChange={handleInputChange}
+                  required
+                />
+              </Form.Group>
+            </Col>
 
-              <Col md={6} className="mb-3">
-                <Form.Group controlId="quantity">
-                  <Form.Label>Quantity in Stock</Form.Label>
-                  <Form.Control
-                    type="number"
-                    placeholder="Enter quantity"
-                    name="quantity"
-                    value={product.quantity}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </Form.Group>
-              </Col>
-            </Row>
+            <Col md={6} className="mb-3">
+              <Form.Group controlId="quantity">
+                <Form.Label>Quantity in Stock</Form.Label>
+                <Form.Control
+                  type="number"
+                  placeholder="Enter quantity"
+                  name="quantity"
+                  value={product.quantity}
+                  onChange={handleInputChange}
+                  required
+                />
+              </Form.Group>
+            </Col>
+          </Row>
 
-            <Form.Group controlId="image" className="mb-3">
-              <Form.Label>{editMode ? 'Update Product Image (optional)' : 'Product Image'}</Form.Label>
-              <Form.Control
-                type="file"
-                name="image"
-                accept="image/*"
-                onChange={handleImageChange}
-                required={!editMode}
-              />
-            </Form.Group>
+          <Form.Group controlId="image" className="mb-3">
+            <Form.Label>{editMode ? 'Update Product Image (optional)' : 'Product Image'}</Form.Label>
+            <Form.Control
+              type="file"
+              name="image"
+              accept="image/*"
+              onChange={handleImageChange}
+              required={!editMode}
+            />
+          </Form.Group>
 
-            <div className="d-flex justify-content-between">
+          <div className="d-flex justify-content-between">
+            <Button
+              variant="primary"
+              type="submit"
+              className="w-50 me-2"
+              disabled={loading}
+            >
+              {loading ? (
+                <Spinner animation="border" size="sm" />
+              ) : (
+                editMode ? "Update Product" : "Add Product"
+              )}
+            </Button>
+
+            {editMode && (
               <Button
-                variant="primary"
-                type="submit"
-                className="w-50 me-2"
+                variant="danger"
+                type="button"
+                className="w-50 ms-2"
+                onClick={handleDelete}
                 disabled={loading}
               >
                 {loading ? (
                   <Spinner animation="border" size="sm" />
                 ) : (
-                  editMode ? "Update Product" : "Add Product"
+                  "Delete Product"
                 )}
               </Button>
-
-              {editMode && (
-                <Button
-                  variant="danger"
-                  type="button"
-                  className="w-50 ms-2"
-                  onClick={handleDelete}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <Spinner animation="border" size="sm" />
-                  ) : (
-                    "Delete Product"
-                  )}
-                </Button>
-              )}
-            </div>
-          </Form>
-        </Card.Body>
-      </Card>
+            )}
+          </div>
+        </Form>
+      </div>
 
       <ToastContainer />
+
+      <style jsx="true">{`
+        .content-wrapper {
+          padding: 20px;
+          background: #f8f9fa;
+        }
+
+        .content-card {
+          background: white;
+          border-radius: 8px;
+          padding: 2rem;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        @media (max-width: 768px) {
+          .content-wrapper {
+            padding: 15px;
+          }
+
+          .content-card {
+            padding: 1rem;
+          }
+        }
+      `}</style>
     </div>
   );
 };
 
-export default AddProductForm;
+export default ProductForm;

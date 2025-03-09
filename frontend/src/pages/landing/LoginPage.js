@@ -26,6 +26,34 @@ const LoginPage = () => {
 
     const result = await response.json();
     if (result.success) {
+      // Transfer guest cart items to authenticated cart
+      const guestCart = JSON.parse(localStorage.getItem("guestCart") || "[]");
+      const existingCart = JSON.parse(localStorage.getItem("cart") || "[]");
+      
+      if (guestCart.length > 0) {
+        // Check if authenticated cart already has items from a different seller
+        if (existingCart.length > 0 && guestCart[0].sellerId !== existingCart[0].sellerId) {
+          toast.warning("Your guest cart items are from a different seller. They will be saved for later.");
+        } else {
+          // Merge guest cart items with existing cart
+          const mergedCart = [...existingCart];
+          
+          guestCart.forEach(guestItem => {
+            const existingItem = mergedCart.find(item => item.id === guestItem.id);
+            if (!existingItem) {
+              mergedCart.push(guestItem);
+            }
+          });
+          
+          localStorage.setItem("cart", JSON.stringify(mergedCart));
+          localStorage.removeItem("guestCart");
+          
+          if (guestCart.length > 0) {
+            toast.success("Guest cart items have been added to your cart!");
+          }
+        }
+      }
+
       toast.success("Login successful");
       localStorage.setItem('token', result.token);
       localStorage.setItem('user', JSON.stringify(result.user));

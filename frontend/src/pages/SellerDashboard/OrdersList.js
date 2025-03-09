@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { Table, Pagination, Spinner, Container, Form, Button, Modal } from "react-bootstrap";
+import { Table, Pagination, Spinner, Form, Button, Modal, Row, Col } from "react-bootstrap";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Title from "../../components_part/TitleCard";
+
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,25 +21,26 @@ const OrdersPage = () => {
   const itemsPerPage = 10;
 
   useEffect(() => {
-    const fetchOrders = async () => {
-      setLoading(true);
-      try {
-        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/api/v1/order`, {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { page, filterStatus, sortField, sortOrder },
-        });
-
-        setOrders(response.data.data);
-        setTotalPages(Math.ceil(response.data.total / itemsPerPage) || 1);
-      } catch (error) {
-        console.error("Error fetching orders", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchOrders();
   }, [page, filterStatus, sortField, sortOrder]);
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/api/v1/order`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { page, filterStatus, sortField, sortOrder },
+      });
+
+      setOrders(response.data.data);
+      setTotalPages(Math.ceil(response.data.total / itemsPerPage) || 1);
+    } catch (error) {
+      console.error("Error fetching orders", error);
+      toast.error("Failed to fetch orders");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleViewOrder = (order) => {
     setSelectedOrder(order);
@@ -58,11 +60,7 @@ const OrdersPage = () => {
 
       if (response.data.success) {
         toast.success("Order status updated successfully!");
-        setOrders((prevOrders) =>
-          prevOrders.map((order) =>
-            order.id === selectedOrder.id ? { ...order, status: updateStatus } : order
-          )
-        );
+        fetchOrders();
         setShowModal(false);
       }
     } catch (error) {
@@ -72,123 +70,156 @@ const OrdersPage = () => {
   };
 
   return (
-    <Container>
-         <Title title={'Orders'}/>
+    <div className="content-wrapper">
+      <Title title={'Orders List'}/>
+      <div className="orders-content">
+        <Form className="mb-3 d-flex gap-3">
+          <Form.Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="shipped">Shipped</option>
+            <option value="delivered">Delivered</option>
+          </Form.Select>
+          <Form.Select value={sortField} onChange={(e) => setSortField(e.target.value)}>
+            <option value="createdAt">Date</option>
+            <option value="totalAmount">Amount</option>
+            <option value="buyer.firstname">Buyer</option>
+          </Form.Select>
+          <Form.Select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </Form.Select>
+        </Form>
 
-      <Form className="mb-3 d-flex gap-3">
-        <Form.Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-          <option value="">All Statuses</option>
-          <option value="pending">Pending</option>
-          <option value="shipped">Shipped</option>
-          <option value="delivered">Delivered</option>
-        </Form.Select>
-        <Form.Select value={sortField} onChange={(e) => setSortField(e.target.value)}>
-          <option value="createdAt">Date</option>
-          <option value="totalAmount">Amount</option>
-          <option value="buyer.firstname">Buyer</option>
-        </Form.Select>
-        <Form.Select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
-          <option value="asc">Ascending</option>
-          <option value="desc">Descending</option>
-        </Form.Select>
-      </Form>
-
-      {loading ? (
-        <Spinner animation="border" />
-      ) : (
-        <Table striped bordered hover>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Product Name</th>
-              <th>Buyer</th>
-              <th>Quantity</th>
-              <th>Total Amount</th>
-              <th>Status</th>
-              <th>Created At</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.length === 0 ? (
-              <tr>
-                <td colSpan="8" className="text-center">
-                  No orders available
-                </td>
-              </tr>
-            ) : (
-              orders.map((order) => (
-                <tr key={order.id}>
-                  <td>{order.id}</td>
-                  <td>{order.product.name}</td>
-                  <td>{order.buyer.firstname} {order.buyer.lastname}</td>
-                  <td>{order.quantity}</td>
-                  <td>{order.totalAmount}</td>
-                  <td>{order.status}</td>
-                  <td>{new Date(order.createdAt).toLocaleString()}</td>
-                  <td>
-                    <Button variant="info" size="sm" onClick={() => handleViewOrder(order)}>
-                      View
-                    </Button>
-                  </td>
+        {loading ? (
+          <div className="text-center">
+            <Spinner animation="border" />
+          </div>
+        ) : (
+          <div className="table-responsive">
+            <Table striped bordered hover>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Product Name</th>
+                  <th>Buyer</th>
+                  <th>Quantity</th>
+                  <th>Total Amount</th>
+                  <th>Status</th>
+                  <th>Created At</th>
+                  <th>Actions</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
-      )}
-
-      <Pagination>
-        <Pagination.Prev onClick={() => setPage(page > 1 ? page - 1 : 1)} />
-        {totalPages > 0 &&
-          [...Array(totalPages)].map((_, index) => (
-            <Pagination.Item key={index} active={index + 1 === page} onClick={() => setPage(index + 1)}>
-              {index + 1}
-            </Pagination.Item>
-          ))}
-        <Pagination.Next onClick={() => setPage(page < totalPages ? page + 1 : totalPages)} />
-      </Pagination>
-
-      {/* Order Details Modal */}
-      <Modal show={showModal} onHide={() => setShowModal(false)}>
-  <Modal.Header closeButton>
-    <Modal.Title>Order Details</Modal.Title>
-  </Modal.Header>
-  <Modal.Body>
-    {selectedOrder && (
-      <>
-        <p><strong>Product:</strong> {selectedOrder.product.name}</p>
-        <p><strong>Buyer:</strong> {selectedOrder.buyer.firstname} {selectedOrder.buyer.lastname}</p>
-        <p><strong>Quantity:</strong> {selectedOrder.quantity}</p>
-        <p><strong>Total Amount:</strong> {selectedOrder.totalAmount}</p>
-        <p><strong>Status:</strong> {selectedOrder.status}</p>
-        <p><strong>Created At:</strong> {new Date(selectedOrder.createdAt).toLocaleString()}</p>
-
-        {/* Show the form only if the status is not "completed" */}
-        {selectedOrder.status !== "completed" && (
-          <Form>
-            <Form.Group className="mb-3">
-              <Form.Label>Update Status</Form.Label>
-              <Form.Select value={updateStatus} onChange={(e) => setUpdateStatus(e.target.value)}>
-                <option value="shipped">Shipped</option>
-                <option value="delivered">Delivered</option>
-              </Form.Select>
-            </Form.Group>
-          </Form>
+              </thead>
+              <tbody>
+                {orders.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className="text-center">
+                      No orders available
+                    </td>
+                  </tr>
+                ) : (
+                  orders.map((order) => (
+                    <tr key={order.id}>
+                      <td>{order.id}</td>
+                      <td>{order.product.name}</td>
+                      <td>{order.buyer.firstname} {order.buyer.lastname}</td>
+                      <td>{order.quantity}</td>
+                      <td>${order.totalAmount}</td>
+                      <td>{order.status}</td>
+                      <td>{new Date(order.createdAt).toLocaleString()}</td>
+                      <td>
+                        <Button variant="info" size="sm" onClick={() => handleViewOrder(order)}>
+                          View
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </Table>
+          </div>
         )}
-      </>
-    )}
-  </Modal.Body>
-  <Modal.Footer>
-    <Button variant="secondary" onClick={() => setShowModal(false)}>Close</Button>
-    {/* Show the update button only if the status is not "completed" */}
-    {selectedOrder && selectedOrder.status !== "completed" && (
-      <Button variant="success" onClick={handleUpdateStatus}>Update Status</Button>
-    )}
-  </Modal.Footer>
-</Modal>
 
-    </Container>
+        <div className="d-flex justify-content-center mt-4">
+          <Pagination>
+            <Pagination.Prev onClick={() => setPage(page > 1 ? page - 1 : 1)} />
+            {totalPages > 0 &&
+              [...Array(totalPages)].map((_, index) => (
+                <Pagination.Item key={index} active={index + 1 === page} onClick={() => setPage(index + 1)}>
+                  {index + 1}
+                </Pagination.Item>
+              ))}
+            <Pagination.Next onClick={() => setPage(page < totalPages ? page + 1 : totalPages)} />
+          </Pagination>
+        </div>
+
+        <Modal show={showModal} onHide={() => setShowModal(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Order Details</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {selectedOrder && (
+              <>
+                <p><strong>Product:</strong> {selectedOrder.product.name}</p>
+                <p><strong>Buyer:</strong> {selectedOrder.buyer.firstname} {selectedOrder.buyer.lastname}</p>
+                <p><strong>Quantity:</strong> {selectedOrder.quantity}</p>
+                <p><strong>Total Amount:</strong> ${selectedOrder.totalAmount}</p>
+                <p><strong>Status:</strong> {selectedOrder.status}</p>
+                <p><strong>Created At:</strong> {new Date(selectedOrder.createdAt).toLocaleString()}</p>
+
+                {selectedOrder.status !== "completed" && (
+                  <Form>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Update Status</Form.Label>
+                      <Form.Select value={updateStatus} onChange={(e) => setUpdateStatus(e.target.value)}>
+                        <option value="shipped">Shipped</option>
+                        <option value="delivered">Delivered</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Form>
+                )}
+              </>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowModal(false)}>Close</Button>
+            {selectedOrder && selectedOrder.status !== "completed" && (
+              <Button variant="success" onClick={handleUpdateStatus}>Update Status</Button>
+            )}
+          </Modal.Footer>
+        </Modal>
+      </div>
+
+      <style jsx="true">{`
+        .content-wrapper {
+          padding: 20px;
+          background: #f8f9fa;
+        }
+
+        .orders-content {
+          background: white;
+          padding: 2rem;
+          border-radius: 8px;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          margin-bottom: 2rem;
+        }
+
+        .table-responsive {
+          margin-top: 1rem;
+          overflow-x: auto;
+        }
+
+        @media (max-width: 768px) {
+          .content-wrapper {
+            padding: 15px;
+          }
+
+          .orders-content {
+            padding: 1rem;
+          }
+        }
+      `}</style>
+    </div>
   );
 };
 

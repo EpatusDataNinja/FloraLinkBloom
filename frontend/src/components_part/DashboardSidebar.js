@@ -1,16 +1,26 @@
 import React, { useState, useEffect } from "react";
 import { Offcanvas } from "react-bootstrap";
-import { FaTachometerAlt, FaUsers, FaBox, FaShoppingCart, FaCog, FaBell, FaSignOutAlt, FaRegUserCircle } from "react-icons/fa";
-import { Link, useNavigate } from "react-router-dom"; // Use Link and useNavigate for navigation
+import { 
+  FaTachometerAlt, FaUsers, FaBox, FaShoppingCart, FaCog, 
+  FaBell, FaSignOutAlt, FaRegUserCircle, FaLeaf, FaCreditCard,
+  FaComments, FaChartLine, FaStore
+} from "react-icons/fa";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 
 const Sidebar = ({ show, setShow }) => {
-  const [activeItem, setActiveItem] = useState("Overview");
+  const [activeItem, setActiveItem] = useState("");
   const [obj, setObj] = useState({});
   const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const capitalizeWords = (str) => {
+    return str.split(' ').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    ).join(' ');
+  };
 
   const handleLogout = () => {
-    // Logout logic here
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate("/auto");
@@ -18,39 +28,38 @@ const Sidebar = ({ show, setShow }) => {
 
   const adminMenu = [
     { name: "Overview", icon: <FaTachometerAlt />, to: "/admin/overview" },
-    { name: "Users management", icon: <FaUsers />, to: "/dashboard/users" },
-    { name: "Orders", icon: <FaBox />, to: "/admin/orders" },
-    { name: "Pending Products", icon: <FaBox />, to: "/admin/pending_products" },
-    { name: "Products modelation", icon: <FaBox />, to: "/admin/moderate_product" },
-    { name: "Products list", icon: <FaBox />, to: "/product_list" },
+    { name: "Users Management", icon: <FaUsers />, to: "/dashboard/users" },
+    { name: "Orders", icon: <FaShoppingCart />, to: "/admin/orders" },
+    { name: "Pending Products", icon: <FaLeaf />, to: "/admin/pending_products" },
+    { name: "Products Moderation", icon: <FaStore />, to: "/admin/moderate_product" },
     { name: "Notifications", icon: <FaBell />, to: "/notifications" },
     { name: "Profile Edit", icon: <FaRegUserCircle />, to: "/profile" },
-    { name: "Manage Payments", icon: <FaShoppingCart />, to: "/payment" },
+    { name: "Manage Payments", icon: <FaCreditCard />, to: "/payment" },
     { name: "Settings", icon: <FaCog />, to: "/settings" },
   ];
 
   const sellerMenu = [
-    { name: "Home", icon: <FaTachometerAlt />, to: "/seller/overview" },
-    { name: "Orders", icon: <FaBox />, to: "/seller/orders" },
-    { name: "Manage Types", icon: <FaShoppingCart />, to: "/product/categories" },
-    { name: "Post Product", icon: <FaBox />, to: "/add_product" },
-    { name: "Products list", icon: <FaBox />, to: "/product_list" },
-    { name: "Sales Report", icon: <FaBox />, to: "/sales/report" },
+    { name: "Overview", icon: <FaTachometerAlt />, to: "/seller/overview" },
+    { name: "Orders", icon: <FaShoppingCart />, to: "/seller/orders" },
+    { name: "Manage Types", icon: <FaLeaf />, to: "/product/categories" },
+    { name: "Post Product", icon: <FaStore />, to: "/add_product" },
+    { name: "Products List", icon: <FaBox />, to: "/product_list" },
+    { name: "Sales Report", icon: <FaChartLine />, to: "/sales/report" },
     { name: "Notifications", icon: <FaBell />, to: "/notifications" },
     { name: "Profile Edit", icon: <FaRegUserCircle />, to: "/profile" },
-    { name: "Manage Payments", icon: <FaShoppingCart />, to: "/payment" },
-    { name: "Chat", icon: <FaBox />, to: "/chat" },
+    { name: "Manage Payments", icon: <FaCreditCard />, to: "/payment" },
+    { name: "Chat", icon: <FaComments />, to: "/chat" },
     { name: "Settings", icon: <FaCog />, to: "/settings" },
   ];
 
   const buyerMenu = [
-    { name: "Home", icon: <FaTachometerAlt />, to: "/buyer/overview" },
-    { name: "Products", icon: <FaBox />, to: "/products" },
+    { name: "Overview", icon: <FaTachometerAlt />, to: "/dashboard/buyer" },
+    { name: "Products", icon: <FaLeaf />, to: "/products" },
     { name: "Orders", icon: <FaShoppingCart />, to: "/buyer/orders" },
     { name: "Notifications", icon: <FaBell />, to: "/notifications" },
     { name: "Profile Edit", icon: <FaRegUserCircle />, to: "/profile" },
-    { name: "Manage Payments", icon: <FaShoppingCart />, to: "/payment" },
-    { name: "Chat", icon: <FaBox />, to: "/chat" },
+    { name: "Manage Payments", icon: <FaCreditCard />, to: "/payment" },
+    { name: "Chat", icon: <FaComments />, to: "/chat" },
     { name: "Settings", icon: <FaCog />, to: "/settings" },
   ];
 
@@ -64,23 +73,28 @@ const Sidebar = ({ show, setShow }) => {
   }, [navigate]);
 
   useEffect(() => {
+    const currentPath = location.pathname;
+    const menu = getMenu();
+    const currentItem = menu.find(item => currentPath.includes(item.to));
+    if (currentItem) {
+      setActiveItem(currentItem.name);
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
     const fetchNotifications = async () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
       try {
         const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/notification`, {
-          method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
           },
         });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         setUnreadCount(data.unreadCount || 0);
       } catch (error) {
@@ -104,61 +118,243 @@ const Sidebar = ({ show, setShow }) => {
 
   return (
     <>
-      {/* Sidebar for larger screens */}
-      <aside className="col-md-2 d-none d-md-block bg-white sidebar border-end">
-        <div className="p-3">
-          <h4 className="text-center text-success fw-bold">{obj.role} Panel</h4>
+      <aside className="dashboard-sidebar d-none d-md-block">
+        <div className="sidebar-header">
+          <div className="sidebar-brand">
+            <FaLeaf className="brand-icon" />
+            <h4>{capitalizeWords(`${obj.role} Panel`)}</h4>
+          </div>
         </div>
-        <ul className="list-group list-group-flush">
+
+        <div className="sidebar-menu">
           {menuItems.map((item) => (
-            <li
+            <Link
               key={item.name}
-              className={`list-group-item d-flex align-items-center ${activeItem === item.name ? "bg-success text-white" : ""}`}
-              onClick={() => setActiveItem(item.name)} // Set active item
+              to={item.to}
+              className={`menu-item ${activeItem === item.name ? "active" : ""}`}
+              onClick={() => setActiveItem(item.name)}
             >
-              <Link to={item.to} className="text-decoration-none text-dark d-flex align-items-center w-100">
-                {item.icon}
-                <span className="ms-2">{item.name}</span>
-                {item.name === "Notifications" && unreadCount > 0 && (
-                  <span className="badge bg-danger ms-2">{unreadCount}</span>
-                )}
-              </Link>
-            </li>
+              <span className="menu-icon">{item.icon}</span>
+              <span className="menu-text">{capitalizeWords(item.name)}</span>
+              {item.name === "Notifications" && unreadCount > 0 && (
+                <span className="notification-badge">{unreadCount}</span>
+              )}
+            </Link>
           ))}
-          <li className="p-2 d-flex align-items-center text-danger" style={{ cursor: "pointer", margin: '0.4cm' }} onClick={handleLogout}>
-            <FaSignOutAlt className="me-2" /> Logout
-          </li>
-        </ul>
+
+          <button className="logout-button" onClick={handleLogout}>
+            <FaSignOutAlt />
+            <span>Logout</span>
+          </button>
+        </div>
       </aside>
 
-      {/* Offcanvas Sidebar for small screens */}
-      <Offcanvas show={show} onHide={() => setShow(false)} placement="start">
-        <Offcanvas.Header closeButton>
-          <Offcanvas.Title>Menu</Offcanvas.Title>
+      <Offcanvas show={show} onHide={() => setShow(false)} placement="start" className="mobile-sidebar">
+        <Offcanvas.Header closeButton className="mobile-sidebar-header">
+          <div className="sidebar-brand">
+            <FaLeaf className="brand-icon" />
+            <h4>{capitalizeWords(`${obj.role} Panel`)}</h4>
+          </div>
         </Offcanvas.Header>
-        <Offcanvas.Body>
-          <ul className="list-group list-group-flush">
+        <Offcanvas.Body className="mobile-sidebar-body">
+          <div className="sidebar-menu">
             {menuItems.map((item) => (
-              <li
+              <Link
                 key={item.name}
-                className={`list-group-item d-flex align-items-center ${activeItem === item.name ? "bg-success text-white" : ""}`}
+                to={item.to}
+                className={`menu-item ${activeItem === item.name ? "active" : ""}`}
                 onClick={() => {
                   setActiveItem(item.name);
-                  setShow(false); // Close offcanvas after selection
+                  setShow(false);
                 }}
               >
-                <Link to={item.to} className="text-decoration-none text-dark d-flex align-items-center w-100">
-                  {item.icon}
-                  <span className="ms-2">{item.name}</span>
-                  {item.name === "Notifications" && unreadCount > 0 && (
-                    <span className="badge bg-danger ms-2">{unreadCount}</span>
-                  )}
-                </Link>
-              </li>
+                <span className="menu-icon">{item.icon}</span>
+                <span className="menu-text">{capitalizeWords(item.name)}</span>
+                {item.name === "Notifications" && unreadCount > 0 && (
+                  <span className="notification-badge">{unreadCount}</span>
+                )}
+              </Link>
             ))}
-          </ul>
+
+            <button className="logout-button" onClick={handleLogout}>
+              <FaSignOutAlt />
+              <span>Logout</span>
+            </button>
+          </div>
         </Offcanvas.Body>
       </Offcanvas>
+
+      <style jsx="true">{`
+        .dashboard-sidebar {
+          width: 280px;
+          height: calc(100vh - 70px);
+          background: white;
+          border-right: 1px solid rgba(0, 0, 0, 0.1);
+          position: fixed;
+          top: 70px;
+          left: 0;
+          overflow-y: auto;
+          z-index: 100;
+          box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Main content positioning */
+        :global(.main-content) {
+          margin-left: 280px;
+          padding: 1rem;
+          min-height: calc(100vh - 70px);
+          transition: margin-left 0.3s ease;
+        }
+
+        :global(.container-fluid) {
+          padding-left: 280px !important;
+          transition: padding-left 0.3s ease;
+        }
+
+        @media (max-width: 768px) {
+          :global(.main-content),
+          :global(.container-fluid) {
+            margin-left: 0 !important;
+            padding-left: 1rem !important;
+          }
+        }
+
+        .sidebar-header {
+          padding: 1.5rem;
+          background: #15803d;
+          color: white;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-brand {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        .brand-icon {
+          font-size: 1.5rem;
+          color: white;
+        }
+
+        .sidebar-brand h4 {
+          margin: 0;
+          font-size: 1.25rem;
+          font-weight: 600;
+        }
+
+        .sidebar-menu {
+          padding: 1rem 0;
+        }
+
+        .menu-item {
+          display: flex;
+          align-items: center;
+          padding: 0.75rem 1.5rem;
+          color: #374151;
+          text-decoration: none;
+          transition: all 0.2s ease;
+          border-left: 3px solid transparent;
+          gap: 0.75rem;
+          position: relative;
+        }
+
+        .menu-item:hover {
+          background: #f0fdf4;
+          color: #15803d;
+          border-left-color: #15803d;
+        }
+
+        .menu-item.active {
+          background: #f0fdf4;
+          color: #15803d;
+          border-left-color: #15803d;
+          font-weight: 600;
+        }
+
+        .menu-icon {
+          width: 20px;
+          height: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .menu-text {
+          font-size: 0.875rem;
+        }
+
+        .notification-badge {
+          position: absolute;
+          right: 1rem;
+          background: #dc2626;
+          color: white;
+          font-size: 0.75rem;
+          padding: 0.25rem 0.5rem;
+          border-radius: 9999px;
+          font-weight: 600;
+        }
+
+        .logout-button {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          width: 100%;
+          padding: 0.75rem 1.5rem;
+          border: none;
+          background: none;
+          color: #dc2626;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          margin-top: 1rem;
+          border-left: 3px solid transparent;
+        }
+
+        .logout-button:hover {
+          background: #fef2f2;
+          border-left-color: #dc2626;
+        }
+
+        /* Custom Scrollbar */
+        .dashboard-sidebar::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .dashboard-sidebar::-webkit-scrollbar-track {
+          background: #f1f1f1;
+        }
+
+        .dashboard-sidebar::-webkit-scrollbar-thumb {
+          background: #15803d;
+          border-radius: 3px;
+        }
+
+        /* Mobile Sidebar Styles */
+        .mobile-sidebar {
+          width: 280px !important;
+          z-index: 1050;
+        }
+
+        .mobile-sidebar-header {
+          background: #15803d;
+          padding: 1rem;
+        }
+
+        .mobile-sidebar-header .btn-close {
+          color: white;
+          filter: brightness(0) invert(1);
+        }
+
+        .mobile-sidebar-body {
+          padding: 0;
+        }
+
+        @media (max-width: 768px) {
+          .dashboard-sidebar {
+            display: none;
+          }
+        }
+      `}</style>
     </>
   );
 };

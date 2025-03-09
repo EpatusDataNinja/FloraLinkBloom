@@ -14,7 +14,8 @@ import {
   instockController,
   userProduct,
   getAllUsersWithProductStats,
-  getPendingProductsController
+  getPendingProductsController,
+  getApprovedProducts
 } from "../controllers/ProductController.js";
 import { protect,optionalProtect } from "../middlewares/protect.js";
 
@@ -98,6 +99,7 @@ router.get("/users_statistics", getAllUsersWithProductStats);
 router.get("/one/:id", protect, getOneProductsController);
 router.get("/user/:id", userProduct);
 router.get("/pending", protect, getPendingProductsController);
+router.get("/approved", optionalProtect, getApprovedProducts);
 router.post("/add", protect, 
   (req, res, next) => {
     console.log('Add request received');

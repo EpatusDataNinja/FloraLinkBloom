@@ -12,6 +12,31 @@ const Cart = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  // Function to check if adding a new product is allowed
+  const canAddToCart = (newProduct, existingItems) => {
+    if (existingItems.length === 0) return true;
+    
+    // Get the seller ID of the first item in cart
+    const currentSellerId = existingItems[0].sellerId;
+    
+    // Check if new product is from the same seller
+    if (newProduct.sellerId !== currentSellerId) {
+      toast.error(
+        <div>
+          <p>Cannot add products from different sellers to cart.</p>
+          <p>Please complete or clear your current cart first.</p>
+          <p>Current cart has items from: {existingItems[0].sellerName}</p>
+        </div>,
+        {
+          autoClose: 5000,
+          position: "top-center"
+        }
+      );
+      return false;
+    }
+    return true;
+  };
+
   // Load cart items from localStorage and validate with server data
   const loadCartItems = useCallback(async () => {
     try {
@@ -30,55 +55,95 @@ const Cart = () => {
         return;
       }
 
-      // Fetch updated product details from the server
-      const updatedCart = await Promise.all(
-        savedCart.map(async (item) => {
-          try {
-            const response = await axios.get(
-              `${process.env.REACT_APP_BASE_URL}/api/v1/product/one/${item.id}`,
+      // Fetch all approved products to get current data
+      const productsResponse = await axios.get(
+        `${process.env.REACT_APP_BASE_URL}/api/v1/product/approved`,
               {
                 headers: { Authorization: `Bearer ${token}` }
               }
             );
             
-            if (!response.data.data) {
-              throw new Error('Product data not found');
-            }
+      if (!productsResponse.data.data) {
+        throw new Error('Failed to fetch product data');
+      }
 
-            // Update item with latest data from the server
-            const updatedItem = {
-              ...item,
-              availableQuantity: response.data.data.quantity || 0,
-              quantity: Math.min(item.quantity, response.data.data.quantity || 0),
-              price: response.data.data.price || item.price
-            };
+      const currentProducts = productsResponse.data.data;
 
-            return updatedItem;
-          } catch (error) {
-            console.error(`Error loading ${item.name}:`, error);
-            toast.error(`Error loading ${item.name}: ${error.message}`);
-            return {
-              ...item,
-              availableQuantity: 0,
-              quantity: 0,
-              error: error.message
-            };
+      // Update cart items with current product data
+      const updatedCart = savedCart.map(cartItem => {
+        const currentProduct = currentProducts.find(p => p.id === cartItem.id);
+        if (!currentProduct) {
+          toast.error(`${cartItem.name} is no longer available`);
+          return null;
+        }
+
+        return {
+          ...cartItem,
+          availableQuantity: currentProduct.quantity || 0,
+          quantity: Math.min(cartItem.quantity, currentProduct.quantity || 0),
+          price: currentProduct.price,
+          sellerId: currentProduct.userID,
+          sellerName: `${currentProduct.firstname} ${currentProduct.lastname}`.trim(),
+          image: currentProduct.image
+        };
+      }).filter(item => item !== null);
+
+      // Remove unavailable items
+      if (updatedCart.length !== savedCart.length) {
+        toast.info('Some items in your cart are no longer available');
+      }
+
+      if (updatedCart.length === 0) {
+        localStorage.setItem("cart", "[]");
+        setCartItems([]);
+        setLoading(false);
+        return;
+      }
+
+      setCartItems(updatedCart);
+      localStorage.setItem("cart", JSON.stringify(updatedCart));
+
+      // Import any guest cart items if they exist
+      const tempGuestCart = sessionStorage.getItem("tempGuestCart");
+      if (tempGuestCart) {
+        const guestItems = JSON.parse(tempGuestCart);
+        if (guestItems.length > 0) {
+          // Check if guest items are from the same seller
+          if (updatedCart.length === 0 || canAddToCart(guestItems[0], updatedCart)) {
+            const guestItemsWithData = guestItems.map(guestItem => {
+              const productData = currentProducts.find(p => p.id === guestItem.id);
+              if (!productData) return null;
+              
+              return {
+                ...guestItem,
+                availableQuantity: productData.quantity || 0,
+                quantity: Math.min(guestItem.quantity, productData.quantity || 0),
+                price: productData.price,
+                sellerId: productData.userID,
+                sellerName: `${productData.firstname} ${productData.lastname}`.trim(),
+                image: productData.image
+              };
+            }).filter(item => item !== null);
+
+            const combinedCart = [...updatedCart, ...guestItemsWithData];
+            setCartItems(combinedCart);
+            localStorage.setItem("cart", JSON.stringify(combinedCart));
           }
-        })
-      );
-
-      // Filter out invalid items (e.g., those with errors or out of stock)
-      const validItems = updatedCart.filter(item => !item.error && item.availableQuantity > 0);
-      setCartItems(validItems);
-      localStorage.setItem("cart", JSON.stringify(validItems));
+        }
+        // Clear the temporary guest cart
+        sessionStorage.removeItem("tempGuestCart");
+      }
     } catch (error) {
       console.error("Error loading cart items:", error);
-      toast.error("Error loading cart items");
+      toast.error("Error loading cart items. Please try again.");
       setCartItems([]);
     } finally {
       setLoading(false);
     }
   }, [navigate]);
+
+  // Export the canAddToCart function so it can be used in other components
+  window.canAddToCart = (newProduct) => canAddToCart(newProduct, cartItems);
 
   useEffect(() => {
     loadCartItems();
@@ -86,9 +151,6 @@ const Cart = () => {
 
   // Handle quantity updates for a product
   const handleQuantityUpdate = async (productId, change) => {
-    console.log("Updating product ID:", productId);
-    console.log("Current cart items:", cartItems);
-
     try {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -100,68 +162,53 @@ const Cart = () => {
       // Find the current item in the cart
       const currentItem = cartItems.find(item => item.id === productId);
       if (!currentItem) {
-        console.error("Product not found in cart:", productId);
         toast.error("Product not found in cart");
         return;
       }
 
       // Calculate new quantity
       const newQuantity = currentItem.quantity + change;
-      console.log("New quantity:", newQuantity);
 
       // Validate new quantity
       if (newQuantity < 1) {
-        console.warn("Quantity cannot be less than 1 for product:", productId);
         toast.warning("Quantity cannot be less than 1");
         return;
       }
 
-      // Fetch latest product data from the server
+      // Fetch latest product data
       const response = await axios.get(
-        `${process.env.REACT_APP_BASE_URL}/api/v1/product/one/${productId}`,
+        `${process.env.REACT_APP_BASE_URL}/api/v1/product/approved`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }
       );
 
-      if (!response.data.data || !response.data.data.quantity || !response.data.data.price) {
-        console.error("Invalid API response for product:", productId, response.data);
-        toast.error("Invalid product data received from server");
+      const productData = response.data.data.find(p => p.id === productId);
+      if (!productData) {
+        toast.error("Product is no longer available");
+        removeItem(productId);
         return;
       }
-
-      const serverQuantity = response.data.data.quantity;
-      console.log("Server quantity:", serverQuantity);
 
       // Validate against server quantity
-      if (newQuantity > serverQuantity) {
-        console.warn(`Only ${serverQuantity} items available for product:`, productId);
-        toast.warning(`Only ${serverQuantity} items available in stock`);
+      if (newQuantity > productData.quantity) {
+        toast.warning(`Only ${productData.quantity} items available in stock`);
         return;
       }
 
-      // Update the cart with the new quantity
-      const updatedCart = cartItems.map(item => {
-        if (item.id === productId) {
-          const updatedItem = {
-            ...item,
-            quantity: newQuantity,
-            availableQuantity: serverQuantity,
-            price: response.data.data.price || item.price
-          };
-          console.log("Updated item:", updatedItem);
-          return updatedItem;
-        }
-        return item;
-      });
+      // Update the cart
+      const updatedCart = cartItems.map(item =>
+        item.id === productId
+          ? { ...item, quantity: newQuantity, availableQuantity: productData.quantity }
+          : item
+      );
 
-      console.log("Updated cart:", updatedCart);
       setCartItems(updatedCart);
       localStorage.setItem("cart", JSON.stringify(updatedCart));
       toast.success(`Updated ${currentItem.name} quantity to ${newQuantity}`);
     } catch (error) {
       console.error("Error updating quantity:", error);
-      toast.error(error.response?.data?.message || "Failed to update quantity");
+      toast.error("Failed to update quantity. Please try again.");
     }
   };
 
@@ -207,6 +254,18 @@ const Cart = () => {
   return (
     <Container>
       <Title title="Shopping Cart" />
+      
+      {cartItems.length > 0 && (
+        <div className="mb-3">
+          <Card className="bg-light">
+            <Card.Body>
+              <h6 className="mb-0">
+                Current Seller: <span className="text-success">{cartItems[0].sellerName}</span>
+              </h6>
+            </Card.Body>
+          </Card>
+        </div>
+      )}
       
       {cartItems.length === 0 ? (
         <Card className="text-center p-5 shadow-sm">

@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 // Importing components from the landing pages
 import Home from "./pages/landing/Home_page";
@@ -21,8 +23,8 @@ import CartPage from './pages/BuyerDashboard/CartPage';
 import CheckoutPage from './pages/BuyerDashboard/CheckoutPage';
 
 import AdminDashboard from "./pages/AdminDashboard/UsersPage";
-import SellerDashboard from "./pages/SellerDashboard/homePage";
-import BuyerDashboard from "./pages/BuyerDashboard/homePage";
+import SellerDashboard from './pages/SellerDashboard/dashboard';
+import BuyerDashboardPage from "./pages/BuyerDashboard/BuyerDashboardPage";
 
 import Users from "./pages/AdminDashboard/UsersPage";
 import UserProductsAdmin from './pages/AdminDashboard/UserProduct';
@@ -39,9 +41,9 @@ import AdminOrders from './pages/AdminDashboard/AdminOrdersPage';
 
 import AdminOverView from './pages/AdminDashboard/AdminDashboard_Page';
 import SellerOverView from './pages/SellerDashboard/SellerDashboard_Page';
-import BuyerOverView from './pages/BuyerDashboard/SellerDashboard_Page';
+import BuyerOverviewPage from "./pages/BuyerDashboard/BuyerOverviewPage";
 import Chat from './pages/BuyerDashboard/ChatPage';
-import SalesReport from './pages/SellerDashboard/SalesReportPage';
+import SalesReportPage from './pages/SellerDashboard/SalesReportPage';
 import ProductCategories from './pages/SellerDashboard/ProductCategoryPage';
 import PendingProducts from './pages/AdminDashboard/PendingProducts';
 
@@ -53,11 +55,20 @@ import SellerSettings from "./pages/SellerDashboard/settings";
 import BuyerSettings from "./pages/BuyerDashboard/settings";
 import AdminSettings from "./pages/AdminDashboard/settings";
 
+import SellerDashboardPage from "./pages/SellerDashboard/SellerDashboardPage";
+import SellerOverview from "./pages/SellerDashboard/dashboard";
+import OrdersPage from './pages/SellerDashboard/OrdersList';
+import Categories from './pages/SellerDashboard/categoriesManagement';
+import ProductForm from './pages/SellerDashboard/productForm';
+import OutOfStockProducts from './pages/SellerDashboard/ListOfOutProduct';
+import ProductList from './pages/SellerDashboard/LIST_OF_ALL_PRODUCT';
+
 // Main App component
 function App() {
   return (
     // Set up the BrowserRouter for handling routes
     <BrowserRouter>
+      <ToastContainer />
       {/* Define the routes using the Routes component */}
       <Routes>
         {/* Landing Pages */}
@@ -79,8 +90,12 @@ function App() {
 
         <Route path="*" element={<NotFound />} />
         <Route path="/dashboard/admin" element={<AdminDashboard />} exact={true} />
-        <Route path="/dashboard/seller" element={<SellerDashboard />} exact={true} />
-        <Route path="/dashboard/buyer" element={<BuyerDashboard/>} exact={true} />
+        <Route path="/dashboard/seller" element={
+          <SellerDashboardPage>
+            <SellerOverview />
+          </SellerDashboardPage>
+        } />
+        <Route path="/dashboard/buyer" element={<BuyerDashboardPage />} exact={true} />
 
         <Route path="/notifications" element={<Notifications/>} exact={true} />
         <Route path="/user-products/:userId" element={<UserProducts />} />
@@ -90,25 +105,57 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/settings" element={<Profile />} />
 
-        <Route path="/add_product" element={<AddProduct />} />
+        <Route path="/add_product" element={
+          <SellerDashboardPage>
+            <ProductForm />
+          </SellerDashboardPage>
+        } />
         <Route path="/admin/moderate_product" element={<ModelateProduct/>} />
-        <Route path="/product_list" element={<GeneralProductList/>} />  
+        <Route path="/product_list" element={
+          <SellerDashboardPage>
+            <ProductList />
+          </SellerDashboardPage>
+        } />
         <Route path="/products" element={<ProductToBuy/>} />  
 
         <Route path="/buyer/orders" element={<BuyerOrders/>} />    
-        <Route path="/seller/orders" element={<SellersOrders/>} /> 
+        <Route path="/seller/orders" element={
+          <SellerDashboardPage>
+            <OrdersPage />
+          </SellerDashboardPage>
+        } /> 
         <Route path="/admin/orders" element={<AdminOrders/>} /> 
 
         <Route path="/payment" element={<PaymentPage/>} />  
 
-        <Route path="/buyer/overview" element={<BuyerOverView/>} />    
-        <Route path="/seller/overview" element={<SellerOverView/>} /> 
+        <Route path="/buyer/overview" element={<BuyerOverviewPage />} />    
+        <Route path="/seller/overview" element={
+          <SellerDashboardPage>
+            <SellerOverview />
+          </SellerDashboardPage>
+        } /> 
         <Route path="/admin/overview" element={<AdminOverView/>} />   
-        <Route path="/sales/report" element={<SalesReport/>} />   
         <Route path="/chat" element={<Chat/>} /> 
-        <Route path="/product/categories" element={<ProductCategories/>} /> 
-        <Route path="/dashboard/seller/add-product" element={<AddProduct />} />
-        <Route path="/dashboard/seller/products" element={<GeneralProductList />} />
+        <Route path="/product/categories" element={
+          <SellerDashboardPage>
+            <Categories />
+          </SellerDashboardPage>
+        } /> 
+        <Route path="/sales/report" element={
+          <SellerDashboardPage>
+            <SalesReportPage />
+          </SellerDashboardPage>
+        } />
+        <Route path="/dashboard/seller/add-product" element={
+          <SellerDashboardPage>
+            <ProductForm />
+          </SellerDashboardPage>
+        } />
+        <Route path="/dashboard/seller/products" element={
+          <SellerDashboardPage>
+            <ProductList />
+          </SellerDashboardPage>
+        } />
         <Route path="/admin/pending_products" element={<PendingProducts />} />
 
         {/* Profile and Settings Routes */}

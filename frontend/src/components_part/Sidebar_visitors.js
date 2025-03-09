@@ -1,125 +1,401 @@
-import React, { useState } from 'react';
-import { FaCheckCircle, FaBox, FaChevronRight, FaChevronLeft } from 'react-icons/fa';
-import { Card, Badge } from 'react-bootstrap';
+import React, { useState, useEffect, useCallback } from 'react';
+import { FaCheckCircle, FaBox, FaChevronRight, FaChevronLeft, FaUser } from 'react-icons/fa';
+import { Card, Badge, Spinner, Modal, Button, Container } from 'react-bootstrap';
+import axios from 'axios';
+import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 
-const Sidebar = ({ show, setShow }) => {
-  const [selectedSeller, setSelectedSeller] = useState(null);
-  const [currentProductIndex, setCurrentProductIndex] = useState(0);
+// ProductCarousel Component
+const ProductCarousel = ({ products = [], currentIndex = 0, onNext, onPrev, onViewAll, seller }) => {
+  const [autoPlay, setAutoPlay] = useState(true);
+  const autoPlayDelay = 5000;
 
-  // Dummy data for demonstration
-  const approvedProducts = [
-    {
-      user: "Green Thumb Gardens",
-      isTrusted: true,
-      products: [
-        {
-          id: 1,
-          product_name: "Red Roses",
-          price: 29.99,
-          stock_quantity: 50,
-          image: "🌹",
-          created_at: new Date()
-        },
-        {
-          id: 2,
-          product_name: "Tulips",
-          price: 19.99,
-          stock_quantity: 30,
-          image: "🌷",
-          created_at: new Date()
-        }
-      ]
-    },
-    {
-      user: "Blooming Paradise",
-      isTrusted: false,
-      products: [
-        {
-          id: 3,
-          product_name: "Sunflowers",
-          price: 24.99,
-          stock_quantity: 25,
-          image: "🌻",
-          created_at: new Date()
-        }
-      ]
+  useEffect(() => {
+    let intervalId;
+    if (autoPlay && products.length > 1) {
+      intervalId = setInterval(() => {
+        onNext();
+      }, autoPlayDelay);
     }
-  ];
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [autoPlay, onNext, products.length]);
 
-  // Format Date Helper
-  const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
+  const handleMouseEnter = () => setAutoPlay(false);
+  const handleMouseLeave = () => setAutoPlay(true);
 
-  // Handle product navigation
-  const handleProductNavigation = (sellerIndex, direction) => {
-    const seller = approvedProducts[sellerIndex];
-    const maxIndex = seller.products.length - 1;
-    if (direction === 'next') {
-      setCurrentProductIndex(prev => prev >= maxIndex ? 0 : prev + 1);
-    } else {
-      setCurrentProductIndex(prev => prev <= 0 ? maxIndex : prev - 1);
-    }
-  };
+  if (!products || products.length === 0) {
+    return <div className="text-center">No products available</div>;
+  }
 
-  // Seller Products Modal Component
-  const SellerProductsModal = ({ seller, onClose }) => (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="modal-dialog modal-xl modal-dialog-scrollable">
-        <div className="modal-content border-0 shadow">
-          <div className="modal-header border-0 bg-success text-white">
-            <div>
-              <h3 className="modal-title h4 mb-0">{seller.user}'s Products</h3>
-              <div className="d-flex align-items-center mt-2">
-                {seller.isTrusted && (
-                  <Badge bg="light" text="success" className="d-flex align-items-center me-2">
-                    <FaCheckCircle className="me-1" /> Trusted Seller
-                  </Badge>
-                )}
-                <span className="text-light small">
-                  {seller.products.length} products
-                </span>
+  return (
+    <div className="carousel-wrapper">
+      <div className="seller-profile-header">
+        <div className="d-flex align-items-center">
+          <div className="seller-avatar">
+            {seller.image ? (
+              <img 
+                src={seller.image.startsWith('http') ? seller.image : `${process.env.REACT_APP_BASE_URL}${seller.image}`}
+                alt={seller.name}
+                className="rounded-circle"
+                style={{ 
+                  width: '60px', 
+                  height: '60px', 
+                  objectFit: 'cover',
+                  border: '3px solid #15803d',
+                  backgroundColor: 'white'
+                }}
+                onError={(e) => {
+                  e.target.src = 'https://via.placeholder.com/60?text=Seller';
+                }}
+              />
+            ) : (
+              <div 
+                className="rounded-circle bg-light d-flex align-items-center justify-content-center"
+                style={{ 
+                  width: '60px', 
+                  height: '60px',
+                  border: '3px solid #15803d'
+                }}
+              >
+                <FaUser size={30} className="text-success" />
               </div>
-            </div>
-            <button type="button" className="btn-close btn-close-white" onClick={onClose}></button>
+            )}
           </div>
-          <div className="modal-body p-4">
-            <div className="row g-4">
-              {seller.products.map((product) => (
-                <div key={product.id} className="col-md-4">
-                  <Card className="h-100 border-0 shadow-sm hover-card">
-                    <div className="card-img-container">
-                      <div className="product-image d-flex align-items-center justify-content-center">
-                        <span className="product-emoji">{product.image}</span>
+          <div>
+            <h5 className="mb-0 text-success fw-bold">{seller.name || 'Unknown Seller'}</h5>
+            <div className="d-flex align-items-center">
+              <small className="text-muted me-2">
+                {products.length ? `${products.length} products` : 'No products'}
+              </small>
+              <button 
+                className="view-all-link"
+                onClick={onViewAll}
+              >
+                View all →
+              </button>
+            </div>
+          </div>
                       </div>
                     </div>
-                    <Card.Body className="text-center">
-                      <Card.Title className="text-success h5">{product.product_name}</Card.Title>
-                      <p className="price mb-2">${product.price.toFixed(2)}</p>
-                      <div className="d-flex align-items-center justify-content-center mb-2">
-                        <FaBox className="text-muted me-2" />
-                        <span className="stock">Stock: {product.stock_quantity}</span>
-                      </div>
-                      <div className="text-muted small mb-3">
-                        Added: {formatDate(product.created_at)}
-                      </div>
-                      <button className="btn btn-success rounded-pill px-4 w-100">
-                        Add to Cart
-                      </button>
-                    </Card.Body>
-                  </Card>
-                </div>
-              ))}
-            </div>
-          </div>
+
+      <div 
+        className="product-carousel-container"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <div className="product-counter-overlay">
+          {currentIndex + 1} of {products.length}
         </div>
+        
+        <div className="product-carousel">
+          {products.map((product, index) => (
+            <div 
+              key={product.id}
+              className={`carousel-item ${index === currentIndex ? 'active' : ''}`}
+              style={{
+                opacity: index === currentIndex ? 1 : 0,
+                transition: 'opacity 0.5s ease-in-out'
+              }}
+            >
+              <div className="product-content">
+                <div className="product-image-container">
+                  <img 
+                    src={product.image.startsWith('http') ? product.image : `${process.env.REACT_APP_BASE_URL}${product.image}`}
+                    alt={product.name}
+                    onError={(e) => {
+                      e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
+                    }}
+                  />
+                      </div>
+
+                <div className="product-info">
+                  <h4 className="product-name">{product.name}</h4>
+                  <p className="product-price">${product.price?.toFixed(2)}</p>
+                  <div className="product-meta">
+                    <span className="stock">Stock: {product.quantity}</span>
+                    <span className="date">
+                      Added: {new Date(product.createdAt).toLocaleDateString()}
+                    </span>
+                      </div>
+                  <p className="product-description">{product.description}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        
+        {products.length > 1 && (
+          <div className="carousel-controls">
+            <button 
+              className="carousel-control prev" 
+              onClick={onPrev}
+              aria-label="Previous product"
+            >
+              <FaChevronLeft />
+            </button>
+            <button 
+              className="carousel-control next" 
+              onClick={onNext}
+              aria-label="Next product"
+            >
+              <FaChevronRight />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
+};
+
+// SellerProductsModal Component
+const SellerProductsModal = ({ seller, onClose, onAddToCart }) => {
+  if (!seller) return null;
+
+  return (
+    <Modal show={true} onHide={onClose} size="xl">
+      <Modal.Header closeButton>
+        <Modal.Title>
+          <div className="d-flex align-items-center">
+            <div className="seller-avatar me-3">
+              {seller.image ? (
+                <img 
+                  src={seller.image.startsWith('http') ? seller.image : `${process.env.REACT_APP_BASE_URL}${seller.image}`}
+                  alt={seller.name}
+                  className="rounded-circle"
+                  style={{ 
+                    width: '50px', 
+                    height: '50px', 
+                    objectFit: 'cover',
+                    border: '2px solid #15803d',
+                    backgroundColor: 'white'
+                  }}
+                  onError={(e) => {
+                    e.target.src = 'https://via.placeholder.com/50?text=Seller';
+                  }}
+                />
+              ) : (
+                <div 
+                  className="rounded-circle bg-light d-flex align-items-center justify-content-center"
+                  style={{ 
+                    width: '50px', 
+                    height: '50px', 
+                    border: '2px solid #15803d' 
+                  }}
+                >
+                  <FaUser size={24} className="text-success" />
+                </div>
+              )}
+            </div>
+            <div>
+              <h5 className="mb-0">{seller.name}</h5>
+              <small className="text-muted">
+                {seller.products?.length || 0} products
+              </small>
+            </div>
+          </div>
+        </Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <div className="row g-4">
+          {seller.products?.map((product) => (
+            <div key={product.id} className="col-md-4">
+              <Card className="h-100 border-0 shadow-sm product-card">
+                <Card.Img 
+                  variant="top" 
+                  src={product.image.startsWith('http') ? product.image : `${process.env.REACT_APP_BASE_URL}${product.image}`}
+                  style={{ height: "200px", objectFit: "cover" }}
+                  onError={(e) => {
+                    e.target.src = 'https://via.placeholder.com/200x200?text=No+Image';
+                  }}
+                />
+                <Card.Body>
+                  <Card.Title>{product.name}</Card.Title>
+                  <Card.Text>{product.description}</Card.Text>
+                  <Card.Text className="text-success fw-bold">${product.price?.toFixed(2)}</Card.Text>
+                  <Card.Text>Stock: {product.quantity}</Card.Text>
+                  <Button 
+                    variant="success"
+                    onClick={() => onAddToCart(product)}
+                    disabled={product.quantity <= 0}
+                    className="w-100"
+                  >
+                    Add to Cart
+                  </Button>
+                </Card.Body>
+              </Card>
+            </div>
+          ))}
+        </div>
+      </Modal.Body>
+    </Modal>
+  );
+};
+
+const Sidebar = ({ show, setShow }) => {
+  const [groupedProducts, setGroupedProducts] = useState({});
+  const [currentProductIndex, setCurrentProductIndex] = useState({});
+  const [selectedSeller, setSelectedSeller] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  // Fetch products from API
+  const fetchProducts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/api/v1/product/approved`);
+
+      if (response.data.success && response.data.data && response.data.data.length > 0) {
+        const products = response.data.data;
+        
+        const grouped = products.reduce((acc, product) => {
+          const sellerId = product.userID;
+          if (!acc[sellerId]) {
+            acc[sellerId] = {
+              seller: {
+                id: sellerId,
+                name: `${product.firstname} ${product.lastname}`.trim() || 'Unknown Seller',
+                image: product.userImage,
+                isTrusted: product.userStatus === 'active',
+                totalProducts: 0
+              },
+              products: []
+            };
+          }
+          acc[sellerId].seller.totalProducts++;
+          acc[sellerId].products.push({
+            ...product,
+            sellerName: `${product.firstname} ${product.lastname}`.trim() || 'Unknown Seller',
+            sellerImage: product.userImage
+          });
+          return acc;
+        }, {});
+
+        setGroupedProducts(grouped);
+        
+        const initialIndexes = Object.keys(grouped).reduce((acc, sellerId) => {
+          acc[sellerId] = 0;
+          return acc;
+        }, {});
+        setCurrentProductIndex(initialIndexes);
+      }
+    } catch (error) {
+      console.error("Error fetching products:", error);
+      toast.error("Failed to load products");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  const handleProductNavigation = useCallback((sellerId, direction) => {
+    const sellerProducts = groupedProducts[sellerId].products;
+    const maxIndex = sellerProducts.length - 1;
+    setCurrentProductIndex(prev => ({
+      ...prev,
+      [sellerId]: direction === 'next' 
+        ? (prev[sellerId] >= maxIndex ? 0 : prev[sellerId] + 1)
+        : (prev[sellerId] <= 0 ? maxIndex : prev[sellerId] - 1)
+    }));
+  }, [groupedProducts]);
+
+  const addToGuestCart = (product) => {
+    try {
+      const existingCart = JSON.parse(localStorage.getItem("guestCart") || "[]");
+      
+      if (existingCart.length > 0) {
+        const currentSellerId = existingCart[0].sellerId;
+        const currentSellerName = existingCart[0].sellerName;
+
+        if (product.userID !== currentSellerId) {
+          toast.error(
+            <div>
+              <h6 className="mb-2">Cannot Mix Sellers in Cart</h6>
+              <p>Your cart already has items from: <strong>{currentSellerName}</strong></p>
+              <p>Please either:</p>
+              <ul className="mb-0">
+                <li>Complete your current cart</li>
+                <li>Clear your cart to add items from a different seller</li>
+              </ul>
+            </div>,
+            {
+              autoClose: 6000,
+              position: "top-center",
+              style: { backgroundColor: '#fff3cd', color: '#664d03' }
+            }
+          );
+          return;
+        }
+      }
+
+      const existingProduct = existingCart.find(item => item.id === product.id);
+      if (existingProduct) {
+        toast.info(
+          <div>
+            <h6 className="mb-2">Product Already in Cart</h6>
+            <p>This product is already in your cart.</p>
+            <p>You can adjust the quantity in the cart page.</p>
+            <button 
+              onClick={() => navigate('/cart')} 
+              className="btn btn-sm btn-success mt-2"
+            >
+              Go to Cart
+            </button>
+          </div>,
+          {
+            autoClose: 5000,
+            position: "top-center",
+            style: { backgroundColor: '#cff4fc', color: '#055160' }
+          }
+        );
+        return;
+      }
+
+      const cartItem = {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        image: product.image,
+        quantity: 1,
+        availableQuantity: product.quantity,
+        sellerId: product.userID,
+        sellerName: product.sellerName
+      };
+
+      localStorage.setItem("guestCart", JSON.stringify([...existingCart, cartItem]));
+      toast.success(
+        <div>
+          <p className="mb-1"><strong>{product.name}</strong> added to cart!</p>
+          <small>Go to cart to adjust quantity if needed.</small>
+        </div>,
+        {
+          position: "top-right",
+          autoClose: 3000
+        }
+      );
+    } catch (error) {
+      console.error("Error adding to guest cart:", error);
+      toast.error("Failed to add product to cart");
+    }
+  };
+
+  const handleViewAll = (sellerData) => {
+    const enrichedSellerData = {
+      ...sellerData.seller,
+      products: sellerData.products,
+      totalProducts: sellerData.products.length,
+      image: sellerData.seller.image || null
+    };
+    setSelectedSeller(enrichedSellerData);
+    setShowModal(true);
+  };
 
   return (
     <aside className={`sidebar ${show ? 'show' : ''}`}>
@@ -127,75 +403,38 @@ const Sidebar = ({ show, setShow }) => {
         <h2 className="h5 mb-0">Choose Your Grower/Florist</h2>
       </div>
       <div className="sidebar-content">
-        {approvedProducts.map((seller, sellerIndex) => (
-          <div
-            key={seller.user}
-            className="seller-card"
-            onClick={() => setSelectedSeller(seller)}
-          >
-            <div className="seller-info">
-              <h3 className="h6 text-success fw-bold mb-1">{seller.user}</h3>
-              <p className="text-muted small mb-2">
-                {seller.products.length} available products
-              </p>
-              {seller.isTrusted && (
-                <Badge bg="success-light" text="success" className="d-flex align-items-center w-auto">
-                  <FaCheckCircle className="me-1" /> Trusted Seller
-                </Badge>
-              )}
+        {loading ? (
+          <div className="text-center py-4">
+            <Spinner animation="border" variant="success" />
             </div>
-
-            {/* Product Preview */}
-            <div className="preview-wrapper">
-              <Card className="preview-card border-0 shadow-sm">
-                {seller.products.map((product, index) => (
-                  <div
-                    key={product.id}
-                    className={`preview-item ${index === currentProductIndex ? 'd-block' : 'd-none'}`}
-                  >
-                    <div className="preview-image">
-                      <span className="preview-emoji">{product.image}</span>
-                    </div>
-                    <div className="preview-details">
-                      <h4 className="h6 text-success mb-1">{product.product_name}</h4>
-                      <p className="price-small mb-0">
-                        ${product.price.toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                {seller.products.length > 1 && (
-                  <div className="preview-navigation">
-                    <button
-                      className="nav-btn prev"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleProductNavigation(sellerIndex, 'prev');
-                      }}
-                    >
-                      <FaChevronLeft />
-                    </button>
-                    <button
-                      className="nav-btn next"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleProductNavigation(sellerIndex, 'next');
-                      }}
-                    >
-                      <FaChevronRight />
-                    </button>
-                  </div>
-                )}
-              </Card>
+        ) : Object.entries(groupedProducts).length > 0 ? (
+          Object.entries(groupedProducts).map(([sellerId, sellerData]) => (
+            <div key={sellerId} className="seller-section mb-4">
+              <ProductCarousel
+                products={sellerData.products}
+                currentIndex={currentProductIndex[sellerId] || 0}
+                onNext={() => handleProductNavigation(sellerId, 'next')}
+                onPrev={() => handleProductNavigation(sellerId, 'prev')}
+                onViewAll={() => handleViewAll(sellerData)}
+                seller={sellerData.seller}
+              />
             </div>
+          ))
+        ) : (
+          <div className="text-center py-4">
+            <p>No products available</p>
           </div>
-        ))}
+        )}
       </div>
 
-      {selectedSeller && (
+      {showModal && selectedSeller && (
         <SellerProductsModal
           seller={selectedSeller}
-          onClose={() => setSelectedSeller(null)}
+          onClose={() => {
+            setShowModal(false);
+            setSelectedSeller(null);
+          }}
+          onAddToCart={addToGuestCart}
         />
       )}
 
@@ -217,81 +456,156 @@ const Sidebar = ({ show, setShow }) => {
         .sidebar-header {
           background: #15803d;
           color: white;
-          padding: 1.25rem;
+          padding: 1rem;
           text-align: center;
         }
 
         .sidebar-content {
-          padding: 1.5rem;
+          padding: 1rem;
         }
 
-        .seller-card {
-          background: #f8f9fa;
+        .seller-section {
+          background: #f8faf8;
           border-radius: 12px;
-          padding: 1.25rem;
-          margin-bottom: 1.25rem;
-          cursor: pointer;
+          overflow: hidden;
           transition: all 0.3s ease;
+          margin-bottom: 1rem;
         }
 
-        .seller-card:hover {
+        .seller-section:hover {
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
-        .seller-info {
-          margin-bottom: 1rem;
-        }
-
-        .preview-wrapper {
-          position: relative;
-        }
-
-        .preview-card {
-          border-radius: 8px;
-          overflow: hidden;
-        }
-
-        .preview-image {
-          background: #15803d;
-          height: 120px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .preview-emoji {
-          font-size: 2.5rem;
-          transition: transform 0.3s ease;
-        }
-
-        .seller-card:hover .preview-emoji {
-          transform: scale(1.1);
-        }
-
-        .preview-details {
+        .seller-profile-header {
           padding: 0.75rem;
-          text-align: center;
+          background: white;
+          border-bottom: 1px solid #e5e7eb;
         }
 
-        .preview-navigation {
+        .seller-avatar img, .seller-avatar div {
+          width: 40px;
+          height: 40px;
+          border: 2px solid #15803d;
+        }
+
+        .product-carousel-container {
+          position: relative;
+          background: #f0faf0;
+          border-radius: 0 0 8px 8px;
+          box-shadow: 0 2px 4px rgba(21, 128, 61, 0.1);
+          overflow: hidden;
+          height: 400px;
+        }
+
+        .product-counter-overlay {
           position: absolute;
-          top: 50%;
+          top: 10px;
+          right: 10px;
+          background: rgba(0, 0, 0, 0.6);
+          color: white;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 0.8rem;
+          z-index: 2;
+        }
+
+        .product-carousel {
+          position: relative;
+          height: 100%;
+        }
+
+        .carousel-item {
+          position: absolute;
+          top: 0;
           left: 0;
-          right: 0;
-          transform: translateY(-50%);
+          width: 100%;
+          height: 100%;
+          opacity: 0;
+          transition: opacity 0.5s ease-in-out;
+        }
+
+        .carousel-item.active {
+          opacity: 1;
+          z-index: 1;
+        }
+
+        .product-content {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          background: #f0faf0;
+        }
+
+        .product-image-container {
+          position: relative;
+          width: 100%;
+          height: 200px;
+          background: #fff5f5;
+        }
+
+        .product-image-container img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .product-info {
+          padding: 15px;
+          background: #fff5f5;
+          border-top: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .product-name {
+          font-size: 1rem;
+          margin: 0 0 8px 0;
+          font-weight: 600;
+          color: #15803d;
+        }
+
+        .product-price {
+          font-size: 1rem;
+          margin: 0 0 8px 0;
+          color: #15803d;
+          font-weight: 600;
+        }
+
+        .product-meta {
           display: flex;
           justify-content: space-between;
-          padding: 0 0.5rem;
+          gap: 8px;
+          margin-bottom: 8px;
+          font-size: 0.8rem;
+          color: #666;
+        }
+
+        .product-description {
+          font-size: 0.85rem;
+          line-height: 1.4;
+          color: #444;
+          -webkit-line-clamp: 3;
+          overflow: hidden;
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+        }
+
+        .carousel-controls {
+          position: absolute;
+          top: 100px;
+          left: 0;
+          right: 0;
+          display: flex;
+          justify-content: space-between;
+          padding: 0 10px;
           pointer-events: none;
         }
 
-        .nav-btn {
+        .carousel-control {
           width: 30px;
           height: 30px;
-          border-radius: 50%;
           background: rgba(255, 255, 255, 0.9);
           border: none;
+          border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -299,62 +613,48 @@ const Sidebar = ({ show, setShow }) => {
           pointer-events: auto;
           transition: all 0.3s ease;
           color: #15803d;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
 
-        .nav-btn:hover {
+        .carousel-control:hover {
           background: white;
           transform: scale(1.1);
+          box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
 
-        .price-small {
+        .view-all-link {
+          background: none;
+          border: none;
+          padding: 0;
+          font-size: 0.8rem;
           color: #15803d;
-          font-weight: 600;
-          font-size: 0.875rem;
+          text-decoration: none;
+          transition: all 0.2s ease;
+          display: inline-flex;
+          align-items: center;
+          font-weight: 500;
+          margin-left: 60px;
         }
 
-        .card-img-container {
-          position: relative;
-          padding-top: 75%;
-          background-color: #15803d;
-          overflow: hidden;
+        .view-all-link:hover {
+          color: #166534;
+          transform: translateX(2px);
         }
 
-        .product-image {
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
+        .product-card {
+          background-color: #f0f7f0;
+          transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
         }
 
-        .product-emoji {
-          font-size: 3.5rem;
-          transition: transform 0.3s ease;
-        }
-
-        .hover-card:hover .product-emoji {
-          transform: scale(1.2);
-        }
-
-        .price {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #15803d;
-        }
-
-        .stock {
-          color: #6c757d;
-          font-size: 0.875rem;
-        }
-
-        .bg-success-light {
-          background-color: #dcfce7 !important;
+        .product-card:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 4px 12px rgba(21, 128, 61, 0.15);
         }
 
         @media (max-width: 768px) {
           .sidebar {
             transform: translateX(-100%);
-            border-right: none;
+            width: 100%;
           }
           .sidebar.show {
             transform: translateX(0);

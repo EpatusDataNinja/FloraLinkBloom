@@ -21,6 +21,7 @@ import db from "../database/models/index.js";
 const Users = db["Users"];
 const Orders = db["Orders"];
 const Products = db["Products"];
+const Categories = db["Categories"];
 
 const Notification = db["Notifications"];
 import imageUploader from "../helpers/imageUplouder.js";
@@ -105,7 +106,7 @@ export const deleteOneProductsController = async (req, res) => {
   try {
     const { id } = req.params;
     const userID = req.user.id;
-    const data = await getOneProductsWithDetails(id, userID);
+    const data = await getOneProductsWithDetails(id);
     if (!data) {
       return res.status(404).json({
         message: "product detail not found",
@@ -668,6 +669,88 @@ export const getPendingProductsController = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch pending products',
+      error: error.message
+    });
+  }
+};
+
+export const getProducts = async (req, res) => {
+  try {
+    const products = await Products.findAll({
+      include: [{
+        model: Users,
+        as: 'User',
+        attributes: ['id', 'firstname', 'lastname', 'image']
+      }],
+      // ... other query options
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: products
+    });
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching products'
+    });
+  }
+};
+
+export const getApprovedProducts = async (req, res) => {
+  try {
+    const products = await Products.findAll({
+      where: { 
+        status: "In Stock" 
+      },
+      include: [
+        {
+          model: Users,
+          as: "user",
+          attributes: ['id', 'firstname', 'lastname', 'image', 'status'],
+          where: { 
+            status: 'active'
+          }
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    const transformedProducts = products.map(product => {
+      const productData = product.toJSON();
+      return {
+        id: productData.id,
+        name: productData.name,
+        description: productData.description,
+        price: parseFloat(productData.price) || 0,
+        quantity: parseInt(productData.quantity) || 0,
+        image: productData.image,
+        status: productData.status,
+        categoryID: productData.categoryID,
+        userID: productData.user.id,
+        firstname: productData.user.firstname,
+        lastname: productData.user.lastname,
+        userImage: productData.user.image,
+        userStatus: productData.user.status,
+        createdAt: productData.createdAt,
+        updatedAt: productData.updatedAt
+      };
+    });
+
+    console.log('Transformed products:', transformedProducts);
+
+    return res.status(200).json({
+      success: true,
+      message: "Approved products retrieved successfully",
+      data: transformedProducts
+    });
+
+  } catch (error) {
+    console.error('Error in getApprovedProducts:', error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching approved products",
       error: error.message
     });
   }

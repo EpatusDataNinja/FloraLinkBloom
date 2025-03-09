@@ -57,15 +57,15 @@ const BuyerOverview = () => {
   }, [token]);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <div className="content-wrapper"><div className="content-card">Loading...</div></div>;
   }
 
   if (error) {
-    return <div>Error: {error}</div>;
+    return <div className="content-wrapper"><div className="content-card">Error: {error}</div></div>;
   }
 
   if (!stats) {
-    return <div>No data available</div>;
+    return <div className="content-wrapper"><div className="content-card">No data available</div></div>;
   }
 
   // Data for Pie charts
@@ -100,60 +100,85 @@ const BuyerOverview = () => {
   };
 
   return (
-    <div className="container mt-4">
+    <div className="content-wrapper">
       <Title title={'Buyer Overview'}/>
+      <div className="content-card">
+        {/* Cards Section */}
+        <Row className="mb-4 g-4">
+          {/* Orders Statistics Card */}
+          <Col xs={12} md={6} lg={4}>
+            <Card className="text-white" style={{ backgroundColor: '#2196f3' }}>
+              <Card.Body>
+                <Card.Title><FaShoppingCart size={32} color="white" /> Orders</Card.Title>
+                <Card.Text>
+                  <strong>Total Orders:</strong> {stats.orderStats.totalOrders || 0}
+                </Card.Text>
+                <Card.Text>
+                  <strong>Completed:</strong> {stats.orderStats.completed || 0} {renderOrderStatus('completed')}
+                </Card.Text>
+                <Card.Text>
+                  <strong>Paid:</strong> {stats.orderStats.paid || 0} {renderOrderStatus('paid')}
+                </Card.Text>
+                <Card.Text>
+                  <strong>Refunded:</strong> {stats.orderStats.totalRefunded || 0} {renderOrderStatus('refunded')}
+                </Card.Text>
+                <Card.Text>
+                  <strong>Total Spent:</strong> ${stats.totalSpent || 0}
+                </Card.Text>
+              </Card.Body>
+            </Card>
+          </Col>
 
-      {/* Cards Section */}
-      <Row className="mb-4 g-4">
-        {/* Orders Statistics Card */}
-        <Col xs={12} md={6} lg={4}>
-          <Card className="text-white" style={{ backgroundColor: '#2196f3' }}>
-            <Card.Body>
-              <Card.Title><FaShoppingCart size={32} color="white" /> Orders</Card.Title>
-              <Card.Text>
-                <strong>Total Orders:</strong> {stats.orderStats.totalOrders || 0}
-              </Card.Text>
-              <Card.Text>
-                <strong>Completed:</strong> {stats.orderStats.completed || 0} {renderOrderStatus('completed')}
-              </Card.Text>
-              <Card.Text>
-                <strong>Paid:</strong> {stats.orderStats.paid || 0} {renderOrderStatus('paid')}
-              </Card.Text>
-              <Card.Text>
-                <strong>Refunded:</strong> {stats.orderStats.totalRefunded || 0} {renderOrderStatus('refunded')}
-              </Card.Text>
-              <Card.Text>
-                <strong>Total Spent:</strong> ${stats.totalSpent || 0}
-              </Card.Text>
-            </Card.Body>
-          </Card>
-        </Col>
+          {/* Total Spent Card */}
+          <Col xs={12} md={6} lg={4}>
+            <Card className="text-white" style={{ backgroundColor: '#ff9800' }}>
+              <Card.Body>
+                <Card.Title><FaDollarSign size={32} color="white" /> Total Spent</Card.Title>
+                <Card.Text>
+                  <strong>Total Spent:</strong> ${stats.totalSpent || 0}
+                </Card.Text>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
 
-        {/* Total Spent Card */}
-        <Col xs={12} md={6} lg={4}>
-          <Card className="text-white" style={{ backgroundColor: '#ff9800' }}>
-            <Card.Body>
-              <Card.Title><FaDollarSign size={32} color="white" /> Total Spent</Card.Title>
-              <Card.Text>
-                <strong>Total Spent:</strong> ${stats.totalSpent || 0}
-              </Card.Text>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
+        {/* Graphs Section */}
+        <Row className="mb-4 g-4">
+          {/* Orders Chart */}
+          <Col xs={8}>
+            <Card>
+              <Card.Body>
+                <Card.Title>Order Breakdown</Card.Title>
+                <Pie data={orderChartData} />
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+      </div>
 
-      {/* Graphs Section */}
-      <Row className="mb-4 g-4">
-        {/* Orders Chart */}
-        <Col xs={8}>
-          <Card>
-            <Card.Body>
-              <Card.Title>Order Breakdown</Card.Title>
-              <Pie data={orderChartData} />
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
+      <style jsx="true">{`
+        .content-wrapper {
+          padding: 20px;
+          background: #f8f9fa;
+        }
+
+        .content-card {
+          background: white;
+          border-radius: 8px;
+          padding: 2rem;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        @media (max-width: 768px) {
+          .content-wrapper {
+            padding: 15px;
+          }
+
+          .content-card {
+            padding: 1rem;
+          }
+        }
+      `}</style>
     </div>
   );
 };
