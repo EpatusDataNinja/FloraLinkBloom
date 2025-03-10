@@ -694,6 +694,15 @@ export const ResetPassword = async (req, res) => {
 export const getAdminOverview = async (req, res) => {
   try {
     console.log("[INFO] Fetching system overview...");
+    
+    // Get current date and last month's date
+    const today = new Date();
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const firstDayOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastDayOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+
+    // User Statistics
     const users = await Users.findAll({
       attributes: ["role"],
       raw: true,
@@ -716,58 +725,72 @@ export const getAdminOverview = async (req, res) => {
     }, {});
     productStats.totalProducts = products.length;
 
-    // Order Statistics
-    const orders = await Orders.findAll({
-      attributes: ["status", "totalAmount"],
-      raw: true,
-    });
-    const orderStats = orders.reduce(
-      (acc, order) => {
-        acc[order.status] = (acc[order.status] || 0) + 1;
-        acc.totalOrders += 1;
-        acc.totalRevenue += parseFloat(order.totalAmount);
-        return acc;
-      },
-      { totalOrders: 0, totalRevenue: 0 }
-    );
-
-    // Category Statistics
-    const categories = await Categories.findAll({
-      include: [
-        {
-          model: Products,
-          as: "Products",
-          attributes: ["id"],
+    // Current Month Revenue
+    const currentMonthRevenue = await Orders.sum('totalAmount', {
+      where: {
+        createdAt: {
+          [db.Sequelize.Op.between]: [firstDayOfMonth, lastDayOfMonth]
         },
+        status: 'completed'
+      }
+    }) || 0;
+
+    // Last Month Revenue
+    const lastMonthRevenue = await Orders.sum('totalAmount', {
+      where: {
+        createdAt: {
+          [db.Sequelize.Op.between]: [firstDayOfLastMonth, lastDayOfLastMonth]
+        },
+        status: 'completed'
+      }
+    }) || 0;
+
+    // Calculate Growth
+    const growth = lastMonthRevenue === 0 
+      ? '100%' 
+      : `${(((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100).toFixed(1)}%`;
+
+    // Calculate Platform Revenue (10% of completed orders)
+    const platformRevenue = (currentMonthRevenue * 0.1);
+
+    // Order Statistics
+    const orderStats = await Orders.findAll({
+      attributes: [
+        [db.Sequelize.fn('COUNT', db.Sequelize.col('*')), 'totalOrders'],
+        [db.Sequelize.fn('SUM', db.Sequelize.literal("CASE WHEN status = 'completed' THEN 1 ELSE 0 END")), 'completed'],
+        [db.Sequelize.fn('SUM', db.Sequelize.literal("CASE WHEN status = 'pending' THEN 1 ELSE 0 END")), 'pending'],
+        [db.Sequelize.fn('SUM', db.Sequelize.literal("CASE WHEN status = 'processing' THEN 1 ELSE 0 END")), 'processing'],
+        [db.Sequelize.fn('SUM', db.Sequelize.col('totalAmount')), 'totalRevenue']
       ],
+      raw: true
     });
-
-
-
-    // Profit from Refunded Orders (10% of refunded payments)
-    const refundedPayments = await Payments.findAll({
-      where: { status: "refunded" },
-      attributes: ["amount"],
-      raw: true,
-    });
-
-    const totalProfit = refundedPayments.reduce(
-      (sum, payment) => sum + parseFloat(payment.amount) * 0.1,
-      0
-    );
-
-    console.log("[INFO] System overview fetched successfully.");
 
     return res.status(200).json({
       success: true,
       userStats,
       productStats,
-      orderStats,
-      totalProfit,
+      orderStats: {
+        ...orderStats[0],
+        totalOrders: parseInt(orderStats[0].totalOrders) || 0,
+        completed: parseInt(orderStats[0].completed) || 0,
+        pending: parseInt(orderStats[0].pending) || 0,
+        processing: parseInt(orderStats[0].processing) || 0,
+        totalRevenue: parseFloat(orderStats[0].totalRevenue) || 0
+      },
+      revenueStats: {
+        monthlyRevenue: currentMonthRevenue,
+        growth,
+        platformFees: platformRevenue.toFixed(2)
+      }
     });
+
   } catch (error) {
     console.error("[ERROR] Failed to fetch system overview:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch dashboard statistics",
+      error: error.message 
+    });
   }
 };
 
