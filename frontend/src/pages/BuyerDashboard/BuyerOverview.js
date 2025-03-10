@@ -10,9 +10,13 @@ import Title from "../../components_part/TitleCard";
 
 const BuyerOverview = () => {
   const [stats, setStats] = useState({
-    totalOrders: 0,
-    pendingOrders: 0,
-    deliveredOrders: 0,
+    orderStats: {
+      totalOrders: 0,
+      completed: 0,
+      paid: 0,
+      totalUnpaidOrders: 0,
+      totalRefunded: 0
+    },
     totalSpent: 0,
     recentOrders: [],
     recentProducts: []
@@ -72,9 +76,23 @@ const BuyerOverview = () => {
         );
 
         if (response.data.success) {
-          setStats(response.data.data);
+          const data = response.data.data || {};
+          
+          // Safely set the stats with default values
+          setStats({
+            orderStats: {
+              totalOrders: data.orderStats?.totalOrders || 0,
+              completed: data.orderStats?.deliveredOrders || 0,
+              paid: data.orderStats?.pendingOrders || 0,
+              totalUnpaidOrders: data.orderStats?.totalUnpaidOrders || 0,
+              totalRefunded: data.orderStats?.totalRefunded || 0
+            },
+            totalSpent: data.orderStats?.totalSpent || 0,
+            recentOrders: data.recentOrders || [],
+            recentProducts: data.recentProducts || []
+          });
         } else {
-          setError('Failed to fetch dashboard data');
+          setError(response.data.message || 'Failed to fetch dashboard data');
         }
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
@@ -87,163 +105,180 @@ const BuyerOverview = () => {
     fetchDashboardData();
   }, [navigate]);
 
+  // Data for Pie chart
+  const orderChartData = {
+    labels: ['Completed', 'Paid', 'Unpaid', 'Refunded'],
+    datasets: [{
+      data: [
+        stats.orderStats.completed,
+        stats.orderStats.paid,
+        stats.orderStats.totalUnpaidOrders,
+        stats.orderStats.totalRefunded
+      ],
+      backgroundColor: ['#4caf50', '#2196f3', '#f44336', '#ff9800'],
+      borderWidth: 1,
+    }],
+  };
+
+  if (loading) {
+    return (
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: "400px" }}>
+        <Spinner animation="border" variant="success" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="alert alert-danger" role="alert">
+        {error}
+      </div>
+    );
+  }
+
   return (
     <div className="overview-section">
       <Title title="Dashboard Overview" />
 
-      {error && (
-        <div className="alert alert-danger" role="alert">
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="text-center py-5">
-          <Spinner animation="border" variant="success" />
-        </div>
-      ) : (
-        <>
-          <div className="stats-grid">
-            <Card className="stat-card">
-              <Card.Body>
-                <div className="d-flex align-items-center">
-                  <div className="stat-icon" style={{ backgroundColor: "#15803d20", color: "#15803d" }}>
-                    <FaShoppingCart />
-                  </div>
-                  <div className="ms-3">
-                    <h6 className="stat-title">Total Orders</h6>
-                    <h3 className="stat-value" style={{ color: "#15803d" }}>{stats.totalOrders}</h3>
-                  </div>
-                </div>
-              </Card.Body>
-            </Card>
-
-            <Card className="stat-card">
-              <Card.Body>
-                <div className="d-flex align-items-center">
-                  <div className="stat-icon" style={{ backgroundColor: "#ca8a0420", color: "#ca8a04" }}>
-                    <FaClock />
-                  </div>
-                  <div className="ms-3">
-                    <h6 className="stat-title">Pending Orders</h6>
-                    <h3 className="stat-value" style={{ color: "#ca8a04" }}>{stats.pendingOrders}</h3>
-                  </div>
-                </div>
-              </Card.Body>
-            </Card>
-
-            <Card className="stat-card">
-              <Card.Body>
-                <div className="d-flex align-items-center">
-                  <div className="stat-icon" style={{ backgroundColor: "#0369a120", color: "#0369a1" }}>
-                    <FaCheckCircle />
-                  </div>
-                  <div className="ms-3">
-                    <h6 className="stat-title">Delivered Orders</h6>
-                    <h3 className="stat-value" style={{ color: "#0369a1" }}>{stats.deliveredOrders}</h3>
-                  </div>
-                </div>
-              </Card.Body>
-            </Card>
-          </div>
-
-          <div className="quick-links-section">
-            <h2 className="section-title">Quick Links</h2>
-            <div className="quick-links-grid">
-              {quickLinks.map((link, index) => (
-                <div 
-                  key={index} 
-                  className="quick-link-card"
-                  onClick={() => navigate(link.path)}
-                  style={{ '--hover-color': link.color }}
-                >
-                  <div className="icon-wrapper" style={{ backgroundColor: `${link.color}20` }}>
-                    {React.cloneElement(link.icon, { color: link.color })}
-                  </div>
-                  <h3>{link.title}</h3>
-                  <p>{link.description}</p>
-                </div>
-              ))}
+      <div className="stats-grid">
+        <Card className="stat-card">
+          <Card.Body>
+            <div className="d-flex align-items-center">
+              <div className="stat-icon" style={{ backgroundColor: "#15803d20", color: "#15803d" }}>
+                <FaShoppingCart />
+              </div>
+              <div className="ms-3">
+                <h6 className="stat-title">Total Orders</h6>
+                <h3 className="stat-value" style={{ color: "#15803d" }}>{stats.orderStats.totalOrders}</h3>
+              </div>
             </div>
-          </div>
+          </Card.Body>
+        </Card>
 
-          <Row className="mt-4">
-            <Col lg={7} className="mb-4">
-              <Card className="h-100">
-                <Card.Body>
-                  <h5 className="mb-4">
-                    <FaClipboardList className="me-2" />
-                    Recent Orders
-                  </h5>
-                  <div className="recent-orders">
-                    {stats.recentOrders?.length > 0 ? (
-                      stats.recentOrders.map((order, index) => (
-                        <div key={index} className="recent-order-item">
-                          <div className="order-icon">
-                            {order.status === 'pending' && <FaClock />}
-                            {order.status === 'shipped' && <FaTruck />}
-                            {order.status === 'delivered' && <FaCheckCircle />}
-                          </div>
-                          <div className="order-info">
-                            <h6>{order.product?.name}</h6>
-                            <p className="text-muted mb-0">
-                              {new Date(order.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div className="order-status">
-                            <span className={`status-badge ${order.status}`}>
-                              {order.status}
-                            </span>
-                            <div className="order-amount">
-                              ${order.totalAmount}
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-muted text-center mb-0">No recent orders</p>
-                    )}
-                  </div>
-                </Card.Body>
-              </Card>
-            </Col>
+        <Card className="stat-card">
+          <Card.Body>
+            <div className="d-flex align-items-center">
+              <div className="stat-icon" style={{ backgroundColor: "#ca8a0420", color: "#ca8a04" }}>
+                <FaClock />
+              </div>
+              <div className="ms-3">
+                <h6 className="stat-title">Pending Orders</h6>
+                <h3 className="stat-value" style={{ color: "#ca8a04" }}>{stats.orderStats.totalUnpaidOrders}</h3>
+              </div>
+            </div>
+          </Card.Body>
+        </Card>
 
-            <Col lg={5} className="mb-4">
-              <Card className="h-100">
-                <Card.Body>
-                  <h5 className="mb-4">
-                    <FaLeaf className="me-2" />
-                    Recently Viewed Products
-                  </h5>
-                  <div className="recent-products">
-                    {stats.recentProducts?.length > 0 ? (
-                      stats.recentProducts.map((product, index) => (
-                        <div key={index} className="recent-product-item">
-                          <img 
-                            src={`${process.env.REACT_APP_BASE_URL}${product.image}`}
-                            alt={product.name}
-                            className="product-image"
-                          />
-                          <div className="product-info">
-                            <h6>{product.name}</h6>
-                            <p className="text-success mb-0">${product.price}</p>
-                          </div>
-                          <div className="product-status">
-                            <FaBoxOpen className="me-1" />
-                            {product.quantity} in stock
-                          </div>
+        <Card className="stat-card">
+          <Card.Body>
+            <div className="d-flex align-items-center">
+              <div className="stat-icon" style={{ backgroundColor: "#0369a120", color: "#0369a1" }}>
+                <FaCheckCircle />
+              </div>
+              <div className="ms-3">
+                <h6 className="stat-title">Delivered Orders</h6>
+                <h3 className="stat-value" style={{ color: "#0369a1" }}>{stats.orderStats.completed}</h3>
+              </div>
+            </div>
+          </Card.Body>
+        </Card>
+      </div>
+
+      <div className="quick-links-section">
+        <h2 className="section-title">Quick Links</h2>
+        <div className="quick-links-grid">
+          {quickLinks.map((link, index) => (
+            <div 
+              key={index} 
+              className="quick-link-card"
+              onClick={() => navigate(link.path)}
+              style={{ '--hover-color': link.color }}
+            >
+              <div className="icon-wrapper" style={{ backgroundColor: `${link.color}20` }}>
+                {React.cloneElement(link.icon, { color: link.color })}
+              </div>
+              <h3>{link.title}</h3>
+              <p>{link.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Row className="mt-4">
+        <Col lg={7} className="mb-4">
+          <Card className="h-100">
+            <Card.Body>
+              <h5 className="mb-4">
+                <FaClipboardList className="me-2" />
+                Recent Orders
+              </h5>
+              <div className="recent-orders">
+                {stats.recentOrders?.length > 0 ? (
+                  stats.recentOrders.map((order, index) => (
+                    <div key={index} className="recent-order-item">
+                      <div className="order-icon">
+                        {order.status === 'pending' && <FaClock />}
+                        {order.status === 'shipped' && <FaTruck />}
+                        {order.status === 'delivered' && <FaCheckCircle />}
+                      </div>
+                      <div className="order-info">
+                        <h6>{order.product?.name}</h6>
+                        <p className="text-muted mb-0">
+                          {new Date(order.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="order-status">
+                        <span className={`status-badge ${order.status}`}>
+                          {order.status}
+                        </span>
+                        <div className="order-amount">
+                          ${order.totalAmount}
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-muted text-center mb-0">No recently viewed products</p>
-                    )}
-                  </div>
-                </Card.Body>
-              </Card>
-            </Col>
-          </Row>
-        </>
-      )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-muted text-center mb-0">No recent orders</p>
+                )}
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col lg={5} className="mb-4">
+          <Card className="h-100">
+            <Card.Body>
+              <h5 className="mb-4">
+                <FaLeaf className="me-2" />
+                Recently Viewed Products
+              </h5>
+              <div className="recent-products">
+                {stats.recentProducts?.length > 0 ? (
+                  stats.recentProducts.map((product, index) => (
+                    <div key={index} className="recent-product-item">
+                      <img 
+                        src={`${process.env.REACT_APP_BASE_URL}${product.image}`}
+                        alt={product.name}
+                        className="product-image"
+                      />
+                      <div className="product-info">
+                        <h6>{product.name}</h6>
+                        <p className="text-success mb-0">${product.price}</p>
+                      </div>
+                      <div className="product-status">
+                        <FaBoxOpen className="me-1" />
+                        {product.quantity} in stock
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-muted text-center mb-0">No recently viewed products</p>
+                )}
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
 
       <style jsx="true">{`
         .overview-section {

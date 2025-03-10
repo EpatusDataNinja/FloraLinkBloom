@@ -39,9 +39,6 @@ import BuyerOrders from './pages/BuyerDashboard/BuyerOrdersPage';
 import SellersOrders from './pages/SellerDashboard/SellerOrdersPage';
 import AdminOrders from './pages/AdminDashboard/AdminOrdersPage';
 
-import AdminOverView from './pages/AdminDashboard/AdminDashboard_Page';
-import SellerOverView from './pages/SellerDashboard/SellerDashboard_Page';
-import BuyerOverviewPage from "./pages/BuyerDashboard/BuyerOverviewPage";
 import Chat from './pages/BuyerDashboard/ChatPage';
 import SalesReportPage from './pages/SellerDashboard/SalesReportPage';
 import ProductCategories from './pages/SellerDashboard/ProductCategoryPage';
@@ -62,6 +59,7 @@ import Categories from './pages/SellerDashboard/categoriesManagement';
 import ProductForm from './pages/SellerDashboard/productForm';
 import OutOfStockProducts from './pages/SellerDashboard/ListOfOutProduct';
 import ProductList from './pages/SellerDashboard/LIST_OF_ALL_PRODUCT';
+import AdminDashboard_Page from "./pages/AdminDashboard/AdminDashboard_Page";
 
 // Main App component
 function App() {
@@ -89,13 +87,13 @@ function App() {
         <Route path="/checkout" element={<CheckoutPage />} exact={true} />
 
         <Route path="*" element={<NotFound />} />
-        <Route path="/dashboard/admin" element={<AdminDashboard />} exact={true} />
+        <Route path="/dashboard/admin" element={<AdminDashboard_Page />} />
         <Route path="/dashboard/seller" element={
           <SellerDashboardPage>
             <SellerOverview />
           </SellerDashboardPage>
         } />
-        <Route path="/dashboard/buyer" element={<BuyerDashboardPage />} exact={true} />
+        <Route path="/dashboard/buyer" element={<BuyerDashboardPage />} />
 
         <Route path="/notifications" element={<Notifications/>} exact={true} />
         <Route path="/user-products/:userId" element={<UserProducts />} />
@@ -128,13 +126,12 @@ function App() {
 
         <Route path="/payment" element={<PaymentPage/>} />  
 
-        <Route path="/buyer/overview" element={<BuyerOverviewPage />} />    
+        <Route path="/buyer/overview" element={<BuyerDashboardPage />} />    
         <Route path="/seller/overview" element={
           <SellerDashboardPage>
             <SellerOverview />
           </SellerDashboardPage>
         } /> 
-        <Route path="/admin/overview" element={<AdminOverView/>} />   
         <Route path="/chat" element={<Chat/>} /> 
         <Route path="/product/categories" element={
           <SellerDashboardPage>
@@ -165,6 +162,12 @@ function App() {
         <Route path="/seller-dashboard/settings" element={<SellerSettings />} />
         <Route path="/buyer-dashboard/settings" element={<BuyerSettings />} />
         <Route path="/admin-dashboard/settings" element={<AdminSettings />} />
+
+        {/* Admin Routes */}
+        <Route path="/admin/overview" element={<AdminDashboard_Page />} />
+        <Route path="/admin/orders" element={<AdminOrders />} />
+        <Route path="/admin/pending_products" element={<PendingProducts />} />
+        <Route path="/admin/moderate_product" element={<ModelateProduct />} />
       </Routes>
     </BrowserRouter>
   );

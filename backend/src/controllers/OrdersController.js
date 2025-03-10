@@ -25,7 +25,7 @@ const Users = db["Users"];
 /**
  * Handle order creation and payment processing
  */
-export const createOrder1 = async (req, res) => {
+const createOrder1 = async (req, res) => {
   try {
     const { productID, quantity, number } = req.body;
     const userID = req.user.id; // Assuming authentication middleware provides user
@@ -279,7 +279,7 @@ const waitForPaymentApproval = async (transactionId) => {
 
 
 
-export const checkoutOrder = async (req, res) => {
+const checkoutOrder = async (req, res) => {
   try {
     const { id } = req.params; // Order ID from request params
 
@@ -412,7 +412,7 @@ export const checkoutOrder = async (req, res) => {
 
 
 
-export const createOrder11 = async (req, res) => {
+const createOrder11 = async (req, res) => {
   try {
     const { productID, quantity, number } = req.body;
     const userID = req.user.id; // Assuming you have authentication middleware
@@ -433,7 +433,7 @@ export const createOrder11 = async (req, res) => {
   }
 };
 
-export const getAllOrdersController = async (req, res) => {
+const getAllOrdersController = async (req, res) => {
   try {
     let orders = [];
     
@@ -469,7 +469,7 @@ export const getAllOrdersController = async (req, res) => {
   }
 };
 
-export const get_one_order = async (req, res) => {
+const get_one_order = async (req, res) => {
   try {
     let orders = [];
     
@@ -507,7 +507,7 @@ export const get_one_order = async (req, res) => {
 };
 
 
-export const changeOrderStatus = async (req, res) => {
+const changeOrderStatus = async (req, res) => {
   try {
     const order = await getoneorder(req.params.id);
     if (!order) {
@@ -580,6 +580,113 @@ export const changeOrderStatus = async (req, res) => {
       error,
     });
   }
+};
+
+const getBuyerDashboardStats = async (req, res) => {
+  try {
+    const userID = req.user.id;
+
+    // Get order statistics
+    const [totalOrders, pendingOrders, deliveredOrders, totalSpent] = await Promise.all([
+      Orders.count({
+        where: { userID }
+      }),
+      Orders.count({
+        where: { 
+          userID,
+          status: 'pending'
+        }
+      }),
+      Orders.count({
+        where: { 
+          userID,
+          status: 'delivered'
+        }
+      }),
+      Orders.sum('totalAmount', {
+        where: { 
+          userID,
+          status: ['delivered', 'shipped']
+        }
+      })
+    ]);
+
+    // Get recent orders
+    const recentOrders = await Orders.findAll({
+      where: { userID },
+      include: [{
+        model: Products,
+        as: 'product',
+        attributes: ['name', 'image']
+      }],
+      order: [['createdAt', 'DESC']],
+      limit: 5
+    });
+
+    // Get recently viewed products
+    const recentProducts = await Products.findAll({
+      where: { 
+        status: 'In Stock'
+      },
+      order: [['updatedAt', 'DESC']],
+      limit: 4,
+      attributes: ['id', 'name', 'price', 'image', 'quantity']
+    });
+
+    // Format the response
+    return res.status(200).json({
+      success: true,
+      data: {
+        orderStats: {
+          totalOrders,
+          pendingOrders,
+          deliveredOrders,
+          totalSpent: totalSpent || 0,
+          totalUnpaidOrders: pendingOrders, // Same as pendingOrders for now
+          totalRefunded: 0 // Add actual refunded count if you have this data
+        },
+        recentOrders: recentOrders.map(order => ({
+          id: order.id,
+          status: order.status,
+          totalAmount: order.totalAmount,
+          createdAt: order.createdAt,
+          product: order.product ? {
+            name: order.product.name,
+            image: order.product.image
+          } : null
+        })),
+        recentProducts: recentProducts.map(product => ({
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          image: product.image,
+          quantity: product.quantity
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getBuyerDashboardStats:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dashboard statistics',
+      error: error.message
+    });
+  }
+};
+
+const addOrderController = async (req, res) => {
+  // Your existing code
+};
+
+export {
+  getBuyerDashboardStats,
+  addOrderController,
+  getAllOrdersController,
+  createOrder1,
+  changeOrderStatus,
+  get_one_order,
+  checkoutOrder
 };
 
 
