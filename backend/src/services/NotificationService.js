@@ -81,24 +81,119 @@ export const deleteAllNotifications = async (userID) => {
   }
 };
 
+// Add notification types enum
+export const NotificationType = {
+  NEW_PRODUCT: 'NEW_PRODUCT',
+  PRODUCT_APPROVED: 'PRODUCT_APPROVED',
+  PRODUCT_REJECTED: 'PRODUCT_REJECTED',
+  LOW_STOCK: 'LOW_STOCK',
+  OUT_OF_STOCK: 'OUT_OF_STOCK',
+  ORDER_PLACED: 'ORDER_PLACED',
+  ORDER_STATUS_CHANGE: 'ORDER_STATUS_CHANGE',
+  PAYMENT_RECEIVED: 'PAYMENT_RECEIVED',
+  STOCK_UPDATE: 'STOCK_UPDATE'
+};
 
-
-
-export const sendNotification = async ({ user, title, message, type }) => {
+// Enhanced sendNotification function
+export const sendNotification = async ({ user, title, message, type, relatedId = null }) => {
   try {
     // Save in-app notification
-    await Notification.create({
+    const notification = await Notification.create({
       userID: user.id,
       title,
       message,
       type,
+      relatedId,
+      isRead: false
     });
 
-    // Send email notification with full user details
-    // if (user) {
-      await new Email(user, { message}).sendNotification();
-    // }
+    // Send email notification
+    if (user.email) {
+      await new Email(user, { 
+        message,
+        title,
+        type
+      }).sendNotification();
+    }
+
+    return notification;
   } catch (error) {
     console.error("[ERROR] Notification sending failed:", error);
+    throw error;
+  }
+};
+
+// Add specific notification functions
+export const sendProductApprovalRequest = async (product, adminUsers) => {
+  try {
+    const notificationPromises = adminUsers.map(admin => 
+      sendNotification({
+        user: admin,
+        title: 'New Product Approval Required',
+        message: `A new product "${product.name}" requires your approval.`,
+        type: NotificationType.NEW_PRODUCT,
+        relatedId: product.id
+      })
+    );
+
+    await Promise.all(notificationPromises);
+  } catch (error) {
+    console.error("[ERROR] Product approval notification failed:", error);
+    throw error;
+  }
+};
+
+export const sendProductStatusUpdate = async (seller, product, status) => {
+  try {
+    const title = status === 'approved' ? 
+      'Product Approved' : 
+      'Product Rejected';
+    
+    const message = status === 'approved' ?
+      `Your product "${product.name}" has been approved and is now live.` :
+      `Your product "${product.name}" has been rejected. Please review and update accordingly.`;
+
+    await sendNotification({
+      user: seller,
+      title,
+      message,
+      type: status === 'approved' ? 
+        NotificationType.PRODUCT_APPROVED : 
+        NotificationType.PRODUCT_REJECTED,
+      relatedId: product.id
+    });
+  } catch (error) {
+    console.error("[ERROR] Product status notification failed:", error);
+    throw error;
+  }
+};
+
+export const sendLowStockNotification = async (seller, product) => {
+  try {
+    await sendNotification({
+      user: seller,
+      title: 'Low Stock Alert',
+      message: `Your product "${product.name}" is running low on stock.`,
+      type: NotificationType.LOW_STOCK,
+      relatedId: product.id
+    });
+  } catch (error) {
+    console.error("[ERROR] Low stock notification failed:", error);
+    throw error;
+  }
+};
+
+export const sendOutOfStockNotification = async (seller, product) => {
+  try {
+    await sendNotification({
+      user: seller,
+      title: 'Out of Stock Alert',
+      message: `Your product "${product.name}" is now out of stock.`,
+      type: NotificationType.OUT_OF_STOCK,
+      relatedId: product.id
+    });
+  } catch (error) {
+    console.error("[ERROR] Out of stock notification failed:", error);
+    throw error;
   }
 };

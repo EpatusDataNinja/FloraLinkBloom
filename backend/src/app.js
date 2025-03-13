@@ -7,6 +7,8 @@ import path from 'path';
 import router from "./routers/index.js";
 import notificationRouter from "./routers/notificationRouter.js";
 import productRouter from "./routers/ProductRouter.js";
+import './cron/reportUpdates.js';
+import './events/orderEvents.js';
 
 dotenv.config();
 

@@ -3,7 +3,7 @@ import { Offcanvas } from "react-bootstrap";
 import { 
   FaTachometerAlt, FaUsers, FaBox, FaShoppingCart, FaCog, 
   FaBell, FaSignOutAlt, FaRegUserCircle, FaLeaf, FaCreditCard,
-  FaComments, FaChartLine, FaStore
+  FaComments, FaChartLine, FaStore, FaChartBar, FaFileAlt
 } from "react-icons/fa";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 
@@ -11,6 +11,7 @@ const Sidebar = ({ show, setShow }) => {
   const [activeItem, setActiveItem] = useState("");
   const [obj, setObj] = useState({});
   const [unreadCount, setUnreadCount] = useState(0);
+  const [expandedMenu, setExpandedMenu] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -32,6 +33,17 @@ const Sidebar = ({ show, setShow }) => {
     { name: "Orders", icon: <FaShoppingCart />, to: "/admin/orders" },
     { name: "Pending Products", icon: <FaLeaf />, to: "/admin/pending_products" },
     { name: "Products Moderation", icon: <FaStore />, to: "/admin/moderate_product" },
+    {
+      name: "Reports",
+      icon: <FaChartBar />,
+      submenu: [
+        { name: "Sales Report", icon: <FaFileAlt />, to: "/admin/reports/sales" },
+        { name: "Product Performance", icon: <FaFileAlt />, to: "/admin/reports/products" },
+        { name: "User Activity", icon: <FaFileAlt />, to: "/admin/reports/users" },
+        { name: "Seasonal Trends", icon: <FaFileAlt />, to: "/admin/reports/seasonal" },
+        { name: "Stock & Perishability", icon: <FaFileAlt />, to: "/admin/reports/stock" }
+      ]
+    },
     { name: "Notifications", icon: <FaBell />, to: "/notifications" },
     { name: "Profile Edit", icon: <FaRegUserCircle />, to: "/profile" },
     { name: "Manage Payments", icon: <FaCreditCard />, to: "/payment" },
@@ -128,18 +140,47 @@ const Sidebar = ({ show, setShow }) => {
 
         <div className="sidebar-menu">
           {menuItems.map((item) => (
-            <Link
-              key={item.name}
-              to={item.to}
-              className={`menu-item ${activeItem === item.name ? "active" : ""}`}
-              onClick={() => setActiveItem(item.name)}
-            >
-              <span className="menu-icon">{item.icon}</span>
-              <span className="menu-text">{capitalizeWords(item.name)}</span>
-              {item.name === "Notifications" && unreadCount > 0 && (
-                <span className="notification-badge">{unreadCount}</span>
+            <div key={item.name}>
+              {item.submenu ? (
+                <>
+                  <div
+                    className={`menu-item ${activeItem === item.name ? "active" : ""}`}
+                    onClick={() => setExpandedMenu(expandedMenu === item.name ? null : item.name)}
+                  >
+                    <span className="menu-icon">{item.icon}</span>
+                    <span className="menu-text">{capitalizeWords(item.name)}</span>
+                    <span className="submenu-arrow">▼</span>
+                  </div>
+                  {expandedMenu === item.name && (
+                    <div className="submenu">
+                      {item.submenu.map((subItem) => (
+                        <Link
+                          key={subItem.name}
+                          to={subItem.to}
+                          className={`submenu-item ${activeItem === subItem.name ? "active" : ""}`}
+                          onClick={() => setActiveItem(subItem.name)}
+                        >
+                          <span className="menu-icon">{subItem.icon}</span>
+                          <span className="menu-text">{capitalizeWords(subItem.name)}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <Link
+                  to={item.to}
+                  className={`menu-item ${activeItem === item.name ? "active" : ""}`}
+                  onClick={() => setActiveItem(item.name)}
+                >
+                  <span className="menu-icon">{item.icon}</span>
+                  <span className="menu-text">{capitalizeWords(item.name)}</span>
+                  {item.name === "Notifications" && unreadCount > 0 && (
+                    <span className="notification-badge">{unreadCount}</span>
+                  )}
+                </Link>
               )}
-            </Link>
+            </div>
           ))}
 
           <button className="logout-button" onClick={handleLogout}>
@@ -159,21 +200,53 @@ const Sidebar = ({ show, setShow }) => {
         <Offcanvas.Body className="mobile-sidebar-body">
           <div className="sidebar-menu">
             {menuItems.map((item) => (
-              <Link
-                key={item.name}
-                to={item.to}
-                className={`menu-item ${activeItem === item.name ? "active" : ""}`}
-                onClick={() => {
-                  setActiveItem(item.name);
-                  setShow(false);
-                }}
-              >
-                <span className="menu-icon">{item.icon}</span>
-                <span className="menu-text">{capitalizeWords(item.name)}</span>
-                {item.name === "Notifications" && unreadCount > 0 && (
-                  <span className="notification-badge">{unreadCount}</span>
+              <div key={item.name}>
+                {item.submenu ? (
+                  <>
+                    <div
+                      className={`menu-item ${activeItem === item.name ? "active" : ""}`}
+                      onClick={() => setExpandedMenu(expandedMenu === item.name ? null : item.name)}
+                    >
+                      <span className="menu-icon">{item.icon}</span>
+                      <span className="menu-text">{capitalizeWords(item.name)}</span>
+                      <span className="submenu-arrow">▼</span>
+                    </div>
+                    {expandedMenu === item.name && (
+                      <div className="submenu">
+                        {item.submenu.map((subItem) => (
+                          <Link
+                            key={subItem.name}
+                            to={subItem.to}
+                            className={`submenu-item ${activeItem === subItem.name ? "active" : ""}`}
+                            onClick={() => {
+                              setActiveItem(subItem.name);
+                              setShow(false);
+                            }}
+                          >
+                            <span className="menu-icon">{subItem.icon}</span>
+                            <span className="menu-text">{capitalizeWords(subItem.name)}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <Link
+                    to={item.to}
+                    className={`menu-item ${activeItem === item.name ? "active" : ""}`}
+                    onClick={() => {
+                      setActiveItem(item.name);
+                      setShow(false);
+                    }}
+                  >
+                    <span className="menu-icon">{item.icon}</span>
+                    <span className="menu-text">{capitalizeWords(item.name)}</span>
+                    {item.name === "Notifications" && unreadCount > 0 && (
+                      <span className="notification-badge">{unreadCount}</span>
+                    )}
+                  </Link>
                 )}
-              </Link>
+              </div>
             ))}
 
             <button className="logout-button" onClick={handleLogout}>
@@ -353,6 +426,37 @@ const Sidebar = ({ show, setShow }) => {
           .dashboard-sidebar {
             display: none;
           }
+        }
+
+        .submenu {
+          background: #f8f9fa;
+          margin-left: 20px;
+        }
+
+        .submenu-item {
+          display: flex;
+          align-items: center;
+          padding: 0.5rem 1.5rem;
+          color: #374151;
+          text-decoration: none;
+          transition: all 0.2s ease;
+          border-left: 3px solid transparent;
+          font-size: 0.875rem;
+        }
+
+        .submenu-item:hover {
+          background: #f0fdf4;
+          color: #15803d;
+          border-left-color: #15803d;
+        }
+
+        .submenu-arrow {
+          margin-left: auto;
+          transition: transform 0.2s ease;
+        }
+
+        .menu-item.active .submenu-arrow {
+          transform: rotate(180deg);
         }
       `}</style>
     </>

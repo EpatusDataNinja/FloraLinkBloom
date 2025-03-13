@@ -9,6 +9,7 @@ import notification from './notificationRouter.js';
 import messagesRouter from './messagesRouter.js';
 import OrdersRouter from './OrdersRouter.js';
 import PaymentRouter from './paymentRouter.js';
+import reportsRouter from './reportsRouter.js';
 
 
 
@@ -23,6 +24,7 @@ router.use('/message', messagesRouter);
 router.use('/order', OrdersRouter);
 router.use('/payment', PaymentRouter);
 router.use('/notification', notification);
+router.use('/reports', reportsRouter);
 
 
 

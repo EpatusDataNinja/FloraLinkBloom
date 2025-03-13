@@ -1,16 +1,11 @@
 import React from "react";
 import { Card } from "react-bootstrap";
 
-const TitleCard = ({ title, className }) => {
+const TitleCard = ({ title }) => {
   return (
-    <Card className={`shadow-sm text-center p-2 ${className || ''}`} style={{
-      backgroundColor: 'white',
-      marginTop: '-40px',
-      marginLeft: '15px',
-      width: 'fit-content'
-    }}>
-      <Card.Body className="py-1">
-        <Card.Title className="fs-5 fw-bold mb-0 text-success">{title || "Untitled Page"}</Card.Title>
+    <Card className="mb-4">
+      <Card.Body>
+        <h2 className="mb-0">{title}</h2>
       </Card.Body>
     </Card>
   );

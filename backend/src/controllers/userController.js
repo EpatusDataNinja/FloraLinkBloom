@@ -725,6 +725,21 @@ export const getAdminOverview = async (req, res) => {
     }, {});
     productStats.totalProducts = products.length;
 
+    // Calculate Total Platform Revenue (10% of all completed orders)
+    const completedOrders = await Orders.findAll({
+      where: {
+        status: 'completed'
+      },
+      attributes: [
+        'totalAmount'
+      ],
+      raw: true
+    });
+
+    const totalPlatformRevenue = completedOrders.reduce((sum, order) => {
+      return sum + (parseFloat(order.totalAmount) * 0.1); // 10% of each completed order
+    }, 0);
+
     // Current Month Revenue
     const currentMonthRevenue = await Orders.sum('totalAmount', {
       where: {
@@ -749,9 +764,6 @@ export const getAdminOverview = async (req, res) => {
     const growth = lastMonthRevenue === 0 
       ? '100%' 
       : `${(((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100).toFixed(1)}%`;
-
-    // Calculate Platform Revenue (10% of completed orders)
-    const platformRevenue = (currentMonthRevenue * 0.1);
 
     // Order Statistics
     const orderStats = await Orders.findAll({
@@ -780,7 +792,7 @@ export const getAdminOverview = async (req, res) => {
       revenueStats: {
         monthlyRevenue: currentMonthRevenue,
         growth,
-        platformFees: platformRevenue.toFixed(2)
+        platformFees: totalPlatformRevenue.toFixed(2) // Total platform revenue from all completed orders
       }
     });
 

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { ErrorBoundary } from "react-error-boundary";
 
 // Importing components from the landing pages
 import Home from "./pages/landing/Home_page";
@@ -61,11 +62,28 @@ import OutOfStockProducts from './pages/SellerDashboard/ListOfOutProduct';
 import ProductList from './pages/SellerDashboard/LIST_OF_ALL_PRODUCT';
 import AdminDashboard_Page from "./pages/AdminDashboard/AdminDashboard_Page";
 
+// Add these imports
+import {
+  UserActivityReport,
+  ReportLayout,
+  ProductPerformanceReport,
+  SeasonalTrendsReport,
+  SalesReport,
+  StockPerishabilityReport
+} from './pages/AdminDashboard/Reports';
+
 // Main App component
 function App() {
+  console.log('SalesReport imported:', SalesReport); // Debug log
+  console.log('ReportLayout imported:', ReportLayout); // Debug log
+  
   return (
-    // Set up the BrowserRouter for handling routes
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true
+      }}
+    >
       <ToastContainer />
       {/* Define the routes using the Routes component */}
       <Routes>
@@ -168,10 +186,60 @@ function App() {
         <Route path="/admin/orders" element={<AdminOrders />} />
         <Route path="/admin/pending_products" element={<PendingProducts />} />
         <Route path="/admin/moderate_product" element={<ModelateProduct />} />
+
+        {/* Reports Routes */}
+        <Route 
+          path="/admin/reports/sales" 
+          element={
+            <ErrorBoundary>
+              <ReportLayout>
+                <SalesReport />
+              </ReportLayout>
+            </ErrorBoundary>
+          } 
+        />
+        <Route 
+          path="/admin/reports/products" 
+          element={
+            <ReportLayout>
+              <ProductPerformanceReport />
+            </ReportLayout>
+          } 
+        />
+        <Route 
+          path="/admin/reports/users" 
+          element={
+            <ErrorBoundary>
+              <ReportLayout>
+                <UserActivityReport />
+              </ReportLayout>
+            </ErrorBoundary>
+          } 
+        />
+        <Route 
+          path="/admin/reports/seasonal" 
+          element={
+            <ErrorBoundary>
+              <ReportLayout>
+                <SeasonalTrendsReport />
+              </ReportLayout>
+            </ErrorBoundary>
+          } 
+        />
+        <Route 
+          path="/admin/reports/stock" 
+          element={
+            <ErrorBoundary>
+              <ReportLayout>
+                <StockPerishabilityReport />
+              </ReportLayout>
+            </ErrorBoundary>
+          } 
+        />
       </Routes>
     </BrowserRouter>
   );
 }
 
-// Export the App component as the default export    OurResto
+// Export the App component as the default export
 export default App;

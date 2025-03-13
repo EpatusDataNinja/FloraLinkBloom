@@ -163,7 +163,6 @@ const ProductPanel = () => {
       setLoading(true);
       const token = localStorage.getItem('token');
       
-      // Create a complete product update payload
       const updatePayload = {
         name: selectedProduct.name,
         categoryID: selectedProduct.category?.id || selectedProduct.categoryID,
@@ -173,20 +172,53 @@ const ProductPanel = () => {
         status: parseInt(newQuantity) > 0 ? 'In Stock' : 'Out of Stock'
       };
 
-      console.log('Update payload:', updatePayload); // Debug log
-
       const response = await axios.put(
         `${process.env.REACT_APP_BASE_URL}/api/v1/product/update/${selectedProduct.id}`,
         updatePayload,
         {
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+          headers: { Authorization: `Bearer ${token}` }
         }
       );
 
       if (response.data.success) {
+        // Send stock-related notifications
+        try {
+          // Low stock notification (if quantity is below threshold)
+          if (parseInt(newQuantity) > 0 && parseInt(newQuantity) <= 10) {
+            await axios.post(
+              `${process.env.REACT_APP_BASE_URL}/api/v1/notification/create`,
+              {
+                title: "Low Stock Alert",
+                message: `Your product "${selectedProduct.name}" is running low on stock (${newQuantity} units remaining).`,
+                type: "LOW_STOCK",
+                relatedId: selectedProduct.id
+              },
+              {
+                headers: { Authorization: `Bearer ${token}` }
+              }
+            );
+          }
+
+          // Out of stock notification
+          if (parseInt(newQuantity) === 0) {
+            await axios.post(
+              `${process.env.REACT_APP_BASE_URL}/api/v1/notification/create`,
+              {
+                title: "Out of Stock Alert",
+                message: `Your product "${selectedProduct.name}" is now out of stock.`,
+                type: "OUT_OF_STOCK",
+                relatedId: selectedProduct.id
+              },
+              {
+                headers: { Authorization: `Bearer ${token}` }
+              }
+            );
+          }
+        } catch (notifError) {
+          console.error("Notification error:", notifError);
+          // Don't block the update process if notification fails
+        }
+
         // Update local state
         setInStock(prev =>
           prev.map(product =>
@@ -202,6 +234,7 @@ const ProductPanel = () => {
               : product
           )
         );
+        
         toast.success("Product updated successfully");
         setShowUpdateModal(false);
         setNewQuantity("");

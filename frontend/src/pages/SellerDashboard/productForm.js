@@ -4,6 +4,7 @@ import { toast, ToastContainer } from 'react-toastify';
 import { Form, Button, Card, Row, Col, Spinner } from 'react-bootstrap';
 import 'react-toastify/dist/ReactToastify.css';
 import Title from "../../components_part/TitleCard";
+import axios from 'axios';
 
 const ProductForm = ({ editMode, productData }) => {
   const [product, setProduct] = useState({
@@ -130,24 +131,35 @@ const ProductForm = ({ editMode, productData }) => {
         body: formData
       });
 
-      const responseText = await response.text();
-      console.log('Raw server response:', responseText);
-
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        console.error('Failed to parse response:', e);
-        throw new Error(`Server response error: ${responseText}`);
-      }
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.message || data.error || "Failed to process request");
       }
 
+      // If this is a new product, notify admins
+      if (!editMode) {
+        try {
+          await axios.post(
+            `${process.env.REACT_APP_BASE_URL}/api/v1/notification/create`,
+            {
+              title: 'New Product Approval Required',
+              message: `A new product "${product.name}" requires approval.`,
+              type: 'NEW_PRODUCT',
+              relatedId: data.data.id
+            },
+            {
+              headers: { Authorization: `Bearer ${token}` }
+            }
+          );
+        } catch (notificationError) {
+          console.error('Failed to send notification:', notificationError);
+          // Don't throw here - we don't want to prevent product creation
+        }
+      }
+
       toast.success(editMode ? "Product updated successfully!" : "Product added successfully!");
       
-      // Wait for the toast to be visible
       setTimeout(() => {
         navigate("/dashboard/seller/products");
       }, 2000);

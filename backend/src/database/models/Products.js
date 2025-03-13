@@ -1,5 +1,6 @@
 "use strict";
 const { Model } = require("sequelize");
+const { Op } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class Products extends Model {
     static associate(models) {
@@ -15,6 +16,27 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "productID", 
         as: "orders" 
       });
+      
+      // Add scopes for common queries
+      Products.addScope('withSalesData', {
+        include: [{
+          model: models.Orders,
+          as: 'orders',
+          include: [{
+            model: models.Payments,
+            as: 'payments',
+            where: { status: 'completed' }
+          }]
+        }]
+      });
+
+      Products.addScope('lowStock', (threshold) => ({
+        where: {
+          quantity: {
+            [Op.lte]: threshold
+          }
+        }
+      }));
     }
   }
   Products.init(

@@ -4,12 +4,16 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import React, { useState, useEffect } from "react";
 import Image from './user.png'
 import Title from "../components_part/TitleCard";
+import axios from 'axios';
+import { Spinner } from 'react-bootstrap';
 
 const Header = ({ setShow }) => {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [user, setUser] = useState(null);
     const [unreadCount, setUnreadCount] = useState(0);
     const [cartItemsCount, setCartItemsCount] = useState(0);
+    const [notifications, setNotifications] = useState([]);
+    const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -42,31 +46,6 @@ const Header = ({ setShow }) => {
         } else {
             navigate("/auto");
         }
-
-        const fetchNotifications = async () => {
-            const token = localStorage.getItem('token');
-            if (!token) return;
-
-            try {
-                const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/notification`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Accept': 'application/json'
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                if (data.success) {
-                    setUnreadCount(data.unreadCount || 0);
-                }
-            } catch (error) {
-                console.error('Error fetching notifications:', error);
-            }
-        };
 
         fetchNotifications();
         const interval = setInterval(fetchNotifications, 30000);
@@ -113,6 +92,31 @@ const Header = ({ setShow }) => {
         return role ? role.charAt(0).toUpperCase() + role.slice(1) : '';
     };
 
+    const fetchNotifications = async () => {
+        if (!localStorage.getItem('token')) return;
+        
+        setIsLoadingNotifications(true);
+        try {
+            const response = await axios.get(
+                `${process.env.REACT_APP_BASE_URL}/api/v1/notification`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${localStorage.getItem('token')}`,
+                    },
+                }
+            );
+
+            if (response.data.success) {
+                setNotifications(response.data.data || []);
+                setUnreadCount(response.data.data.filter(n => !n.isRead).length);
+            }
+        } catch (error) {
+            console.error('Error fetching notifications:', error);
+        } finally {
+            setIsLoadingNotifications(false);
+        }
+    };
+
     return (
         <header className="dashboard-header">
             <div className="header-left">
@@ -148,12 +152,14 @@ const Header = ({ setShow }) => {
                     
                     <Link to="/notifications" className="action-button notification-button">
                         <FaBell />
-                            {unreadCount > 0 && (
+                        {isLoadingNotifications ? (
+                            <Spinner animation="border" size="sm" />
+                        ) : unreadCount > 0 && (
                             <Badge pill bg="danger" className="notification-badge">
-                                    {unreadCount}
-                                </Badge>
-                            )}
-                        </Link>
+                                {unreadCount}
+                            </Badge>
+                        )}
+                    </Link>
 
                 {user?.role === 'buyer' && (
                     <button 

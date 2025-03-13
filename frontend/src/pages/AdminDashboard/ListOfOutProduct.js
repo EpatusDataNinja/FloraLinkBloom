@@ -53,9 +53,28 @@ const ListOfOutProduct = () => {
       );
 
       if (response.data.success) {
+        // Send notification to seller about product approval
+        try {
+          await axios.post(
+            `${process.env.REACT_APP_BASE_URL}/api/v1/notification/create`,
+            {
+              userID: response.data.data.sellerID, // Assuming the response includes seller ID
+              title: "Product Approved",
+              message: `Your product "${response.data.data.name}" has been approved and is now live.`,
+              type: "PRODUCT_APPROVED",
+              relatedId: productId
+            },
+            {
+              headers: { Authorization: `Bearer ${token}` }
+            }
+          );
+        } catch (notifError) {
+          console.error("Notification error:", notifError);
+          // Don't block the approval process if notification fails
+        }
+
         toast.success("Product approved successfully!");
-        // Refresh the products list
-        fetchProducts();
+        fetchProducts(); // Refresh the products list
       } else {
         throw new Error(response.data.message || "Failed to approve product");
       }
@@ -82,8 +101,27 @@ const ListOfOutProduct = () => {
       );
 
       if (response.data.success) {
+        // Send notification to seller about product rejection
+        try {
+          await axios.post(
+            `${process.env.REACT_APP_BASE_URL}/api/v1/notification/create`,
+            {
+              userID: response.data.data.sellerID,
+              title: "Product Rejected",
+              message: `Your product "${response.data.data.name}" has been rejected. Please review and update accordingly.`,
+              type: "PRODUCT_REJECTED",
+              relatedId: productId
+            },
+            {
+              headers: { Authorization: `Bearer ${token}` }
+            }
+          );
+        } catch (notifError) {
+          console.error("Notification error:", notifError);
+          // Don't block the rejection process if notification fails
+        }
+
         toast.success("Product rejected successfully!");
-        // Refresh the products list
         fetchProducts();
       } else {
         throw new Error(response.data.message || "Failed to reject product");

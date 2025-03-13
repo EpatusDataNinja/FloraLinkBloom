@@ -1,29 +1,124 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { FaBell, FaTrash } from 'react-icons/fa';
-import { Badge, Button, ListGroup, Card } from 'react-bootstrap';
+import { FaBell, FaTrash, FaExclamationTriangle, FaCheckCircle, FaTimesCircle, FaBox, FaShoppingCart } from 'react-icons/fa';
+import { Badge, Button, ListGroup, Card, Spinner } from 'react-bootstrap';
 import { toast } from "react-toastify";
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { formatDistanceToNow } from "date-fns";
 
+const NotificationIcon = ({ type }) => {
+  switch (type) {
+    case 'NEW_PRODUCT':
+      return <FaBox className="text-primary" />;
+    case 'PRODUCT_APPROVED':
+      return <FaCheckCircle className="text-success" />;
+    case 'PRODUCT_REJECTED':
+      return <FaTimesCircle className="text-danger" />;
+    case 'LOW_STOCK':
+      return <FaExclamationTriangle className="text-warning" />;
+    case 'OUT_OF_STOCK':
+      return <FaExclamationTriangle className="text-danger" />;
+    case 'ORDER_PLACED':
+      return <FaShoppingCart className="text-info" />;
+    default:
+      return <FaBell className="text-secondary" />;
+  }
+};
+
+const NotificationBadge = ({ type }) => {
+  let badgeProps = {
+    bg: 'secondary',
+    text: 'Notification'
+  };
+
+  switch (type) {
+    case 'NEW_PRODUCT':
+      badgeProps = { bg: 'primary', text: 'New Product' };
+      break;
+    case 'PRODUCT_APPROVED':
+      badgeProps = { bg: 'success', text: 'Approved' };
+      break;
+    case 'PRODUCT_REJECTED':
+      badgeProps = { bg: 'danger', text: 'Rejected' };
+      break;
+    case 'LOW_STOCK':
+      badgeProps = { bg: 'warning', text: 'Low Stock' };
+      break;
+    case 'OUT_OF_STOCK':
+      badgeProps = { bg: 'danger', text: 'Out of Stock' };
+      break;
+    case 'ORDER_PLACED':
+      badgeProps = { bg: 'info', text: 'New Order' };
+      break;
+  }
+
+  return (
+    <Badge bg={badgeProps.bg} className="ms-2">
+      {badgeProps.text}
+    </Badge>
+  );
+};
+
 const Notifications = () => {
   const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const token = localStorage.getItem('token');
 
   useEffect(() => {
     fetchNotifications();
+    // Set up polling for new notifications
+    const pollInterval = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
+    return () => clearInterval(pollInterval);
   }, []);
 
   const fetchNotifications = async () => {
     try {
+      setError(null);
       const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/api/v1/notification`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setNotifications(response.data.data || []);
+      
+      if (response.data.success) {
+        setNotifications(response.data.data || []);
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch notifications');
+      }
     } catch (error) {
       console.error('Error fetching notifications:', error);
-      setNotifications([]);
+      setError('Failed to load notifications. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleNotificationClick = async (notification) => {
+    if (!notification.isRead) {
+      try {
+        await markAsRead(notification.id);
+      } catch (error) {
+        console.error('Error marking notification as read:', error);
+      }
+    }
+
+    // Handle navigation based on notification type
+    if (notification.relatedId) {
+      switch (notification.type) {
+        case 'NEW_PRODUCT':
+          window.location.href = `/admin/products/pending/${notification.relatedId}`;
+          break;
+        case 'LOW_STOCK':
+        case 'OUT_OF_STOCK':
+          window.location.href = `/seller/products/${notification.relatedId}`;
+          break;
+        case 'ORDER_PLACED':
+          window.location.href = `/orders/${notification.relatedId}`;
+          break;
+        default:
+          // Handle other notification types as needed
+          break;
+      }
     }
   };
 
@@ -86,92 +181,99 @@ const Notifications = () => {
   return (
     <div className="container mt-4">
       <Card>
-        <Card.Header style={{backgroundColor:'lightgreen'}}>
-          <h4>
-            <FaBell /> Notifications{' '}
+        <Card.Header className="bg-light">
+          <div className="d-flex justify-content-between align-items-center">
+            <h4 className="mb-0">
+              <FaBell className="me-2" /> Notifications
+              {notifications.length > 0 && (
+                <Badge pill bg="danger" className="ms-2">
+                  {notifications.length}
+                </Badge>
+              )}
+            </h4>
             {notifications.length > 0 && (
-              <Badge pill bg="danger" className="ms-2">
-                {notifications.length} Notifications
-              </Badge>
+              <div>
+                <Button
+                  variant="outline-primary"
+                  size="sm"
+                  className="me-2"
+                  onClick={markAllAsRead}
+                >
+                  Mark All as Read
+                </Button>
+                <Button
+                  variant="outline-danger"
+                  size="sm"
+                  onClick={deleteAllNotifications}
+                >
+                  Clear All
+                </Button>
+              </div>
             )}
-          </h4>
+          </div>
         </Card.Header>
         <Card.Body>
-          {notifications.length === 0 ? (
-            <p>No new notifications.</p>
+          {loading ? (
+            <div className="text-center p-4">
+              <Spinner animation="border" variant="primary" />
+            </div>
+          ) : error ? (
+            <div className="alert alert-danger">{error}</div>
+          ) : notifications.length === 0 ? (
+            <div className="text-center text-muted p-4">
+              <FaBell size={40} className="mb-3" />
+              <p>No notifications to display</p>
+            </div>
           ) : (
-          
             <ListGroup>
               {notifications.map((notification) => (
                 <ListGroup.Item
                   key={notification.id}
-                  className="d-flex justify-content-between align-items-center"
-                  style={{
-                    backgroundColor: notification.isRead ? "#f8f9fa" : "#ffe5e5", // Light red for unread
-                    color: "black",
-                    borderRadius: "8px",
-                    padding: "12px",
-                    marginBottom: "8px",
-                    boxShadow: notification.isRead ? "none" : "0 2px 4px rgba(0,0,0,0.1)",
-                    transition: "all 0.3s ease-in-out",
-                  }}
+                  className={`d-flex align-items-start p-3 ${
+                    !notification.isRead ? 'bg-light' : ''
+                  }`}
+                  action
+                  onClick={() => handleNotificationClick(notification)}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <FaBell style={{ color: "#dc3545" }} /> {/* Bell icon */}
-                    <div>
-                      <strong>{notification.title}</strong>
-                      <p style={{ margin: "4px 0", fontSize: "14px", color: "#555" }}>
-                        {notification.message}
-                      </p>
-                      <small className="text-muted" style={{backgroundColor:'white',border:'1px solid gray',padding:'4px',borderRadius:'5px'}}>
+                  <div className="me-3">
+                    <NotificationIcon type={notification.type} />
+                  </div>
+                  <div className="flex-grow-1">
+                    <div className="d-flex justify-content-between">
+                      <h6 className="mb-1">
+                        {notification.title}
+                        <NotificationBadge type={notification.type} />
+                      </h6>
+                      <small className="text-muted">
                         {formatDistanceToNow(new Date(notification.createdAt), {
                           addSuffix: true,
                         })}
                       </small>
                     </div>
-                  </div>
-                  <div>
+                    <p className="mb-1">{notification.message}</p>
                     {!notification.isRead && (
-                      <Button
-                        size="sm"
-                        // variant="success"
-                        className="me-2"
-                        onClick={() => markAsRead(notification.id)}
-                        style={{ border: '1px solid green', backgroundColor: 'white', color: 'green',margonTop:'-1cm' }}
-                      >
-                        Mark as Read
-                      </Button>
+                      <Badge bg="info" pill>
+                        New
+                      </Badge>
                     )}
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() => deleteNotification(notification.id)}
-                    >
-                      <FaTrash />
-                    </Button>
                   </div>
+                  <Button
+                    variant="link"
+                    className="ms-2 text-danger"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteNotification(notification.id);
+                    }}
+                  >
+                    <FaTrash />
+                  </Button>
                 </ListGroup.Item>
               ))}
             </ListGroup>
-            
-          
           )}
         </Card.Body>
-        <Card.Footer className="d-flex justify-content-between" style={{backgroundColor:'lightgreen'}}>
-          <Button variant="" 
-          onClick={markAllAsRead} 
-          style={{ border: '1px solid green', backgroundColor: 'white', color: 'green',margonTop:'0cm' }}
-          disabled={notifications.length === 0}>
-            Mark All as Read
-          </Button>
-          <Button 
-           style={{ border: '1px solid red', backgroundColor: 'white', color: 'red',margonTop:'0cm' }}
-          onClick={deleteAllNotifications} disabled={notifications.length === 0}>
-            Delete All
-          </Button>
-        </Card.Footer>
       </Card>
-           <ToastContainer />
+      <ToastContainer />
     </div>
   );
 };
