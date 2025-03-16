@@ -33,6 +33,9 @@ const Sidebar = ({ show, setShow }) => {
     { name: "Orders", icon: <FaShoppingCart />, to: "/admin/orders" },
     { name: "Pending Products", icon: <FaLeaf />, to: "/admin/pending_products" },
     { name: "Products Moderation", icon: <FaStore />, to: "/admin/moderate_product" },
+    { name: "Notifications", icon: <FaBell />, to: "/notifications" },
+    { name: "Profile Edit", icon: <FaRegUserCircle />, to: "/profile" },
+    { name: "Manage Payments", icon: <FaCreditCard />, to: "/payment" },
     {
       name: "Reports",
       icon: <FaChartBar />,
@@ -44,9 +47,6 @@ const Sidebar = ({ show, setShow }) => {
         { name: "Stock & Perishability", icon: <FaFileAlt />, to: "/admin/reports/stock" }
       ]
     },
-    { name: "Notifications", icon: <FaBell />, to: "/notifications" },
-    { name: "Profile Edit", icon: <FaRegUserCircle />, to: "/profile" },
-    { name: "Manage Payments", icon: <FaCreditCard />, to: "/payment" },
     { name: "Settings", icon: <FaCog />, to: "/settings" },
   ];
 

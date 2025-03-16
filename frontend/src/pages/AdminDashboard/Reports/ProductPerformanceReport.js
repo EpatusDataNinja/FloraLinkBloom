@@ -14,6 +14,9 @@ import {
 } from 'chart.js';
 import '../../../styles/ReportCommon.css';
 import ErrorBoundary from '../../../components/ErrorBoundary';
+import { FaFilePdf } from 'react-icons/fa';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 // Register ChartJS components
 ChartJS.register(
@@ -40,6 +43,7 @@ const ProductPerformanceReport = () => {
   const [selectedForecast, setSelectedForecast] = useState(null);
   const [realtimeMetrics, setRealtimeMetrics] = useState({});
   const [isReportGenerated, setIsReportGenerated] = useState(false);
+  const pdfRef = useRef(null);
 
   // Move formatCurrency to component level
   const formatCurrency = (value) => {
@@ -383,6 +387,54 @@ const ProductPerformanceReport = () => {
     );
   };
 
+  // Add PDF generation function
+  const handleGeneratePDF = async () => {
+    if (!reportData) return;
+
+    setLoading(true);
+    try {
+      const content = pdfRef.current;
+      const canvas = await html2canvas(content, {
+        scale: 2,
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        windowWidth: content.scrollWidth,
+        windowHeight: content.scrollHeight
+      });
+      
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      });
+
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(
+        canvas.toDataURL('image/jpeg', 1.0),
+        'JPEG',
+        0,
+        0,
+        imgWidth,
+        imgHeight,
+        undefined,
+        'FAST'
+      );
+
+      pdf.save(`Product_Performance_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('PDF generated successfully');
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+      toast.error('Failed to generate PDF');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <ErrorBoundary>
       <div className="product-performance-report">
@@ -447,79 +499,94 @@ const ProductPerformanceReport = () => {
         </Card>
 
         {isReportGenerated && reportData ? (
-          <div ref={reportRef}>
-            {/* Summary Section */}
-            <Card className="mb-4">
-              <Card.Body>
-                <Row>
-                  <Col md={3}>
-                    <h6>Total Products</h6>
-                    <h4>{reportData.summary.totalProducts}</h4>
-                  </Col>
-                  <Col md={3}>
-                    <h6>Total Revenue</h6>
-                    <h4>${formatCurrency(reportData.summary.totalRevenue)}</h4>
-                  </Col>
-                  <Col md={3}>
-                    <h6>Total Orders</h6>
-                    <h4>{reportData.summary.totalOrders}</h4>
-                    {reportData.summary.completedOrders > 0 && (
-                      <small className="text-success">
-                        {reportData.summary.completedOrders} completed
-                      </small>
-                    )}
-                  </Col>
-                  <Col md={3}>
-                    <h6>Average Order Value</h6>
-                    <h4>${formatCurrency(reportData.summary.averageOrderValue)}</h4>
-                  </Col>
-                </Row>
-              </Card.Body>
-            </Card>
+          <>
+            {/* Add PDF button */}
+            <div className="d-flex justify-content-end mb-3">
+              <Button
+                variant="secondary"
+                onClick={handleGeneratePDF}
+                disabled={loading}
+                className="d-flex align-items-center gap-2"
+              >
+                <FaFilePdf /> Save as PDF
+              </Button>
+            </div>
 
-            {/* Chart Section */}
-            <Card className="mb-4">
-              <Card.Body>
-                {chartData && (
-                  <div className="chart-container" style={{ height: '400px' }}>
-                    <Bar data={chartData} options={chartOptions} />
-                  </div>
-                )}
-              </Card.Body>
-            </Card>
-
-            {/* Products Table */}
-            <Card>
-              <Card.Body>
-                <h4>Detailed Product Performance</h4>
-                <div className="table-responsive">
-                  <Table striped bordered hover>
-                    <thead>
-                      <tr>
-                        <th>Product Name</th>
-                        <th>Category</th>
-                        <th>Seller</th>
-                        <th>Total Orders</th>
-                        <th>Units Sold</th>
-                        <th>Revenue</th>
-                        <th>Current Stock</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reportData.products.length > 0 ? (
-                        reportData.products.map(product => renderProductRow(product))
-                      ) : (
-                        <tr>
-                          <td colSpan="8" className="text-center">No products found</td>
-                        </tr>
+            {/* Wrap report content in ref for PDF generation */}
+            <div ref={pdfRef}>
+              {/* Summary Section */}
+              <Card className="mb-4">
+                <Card.Body>
+                  <Row>
+                    <Col md={3}>
+                      <h6>Total Products</h6>
+                      <h4>{reportData.summary.totalProducts}</h4>
+                    </Col>
+                    <Col md={3}>
+                      <h6>Total Revenue</h6>
+                      <h4>${formatCurrency(reportData.summary.totalRevenue)}</h4>
+                    </Col>
+                    <Col md={3}>
+                      <h6>Total Orders</h6>
+                      <h4>{reportData.summary.totalOrders}</h4>
+                      {reportData.summary.completedOrders > 0 && (
+                        <small className="text-success">
+                          {reportData.summary.completedOrders} completed
+                        </small>
                       )}
-                    </tbody>
-                  </Table>
-                </div>
-              </Card.Body>
-            </Card>
-          </div>
+                    </Col>
+                    <Col md={3}>
+                      <h6>Average Order Value</h6>
+                      <h4>${formatCurrency(reportData.summary.averageOrderValue)}</h4>
+                    </Col>
+                  </Row>
+                </Card.Body>
+              </Card>
+
+              {/* Chart Section */}
+              <Card className="mb-4">
+                <Card.Body>
+                  {chartData && (
+                    <div className="chart-container" style={{ height: '400px' }}>
+                      <Bar data={chartData} options={chartOptions} />
+                    </div>
+                  )}
+                </Card.Body>
+              </Card>
+
+              {/* Products Table */}
+              <Card>
+                <Card.Body>
+                  <h4>Detailed Product Performance</h4>
+                  <div className="table-responsive">
+                    <Table striped bordered hover>
+                      <thead>
+                        <tr>
+                          <th>Product Name</th>
+                          <th>Category</th>
+                          <th>Seller</th>
+                          <th>Total Orders</th>
+                          <th>Units Sold</th>
+                          <th>Revenue</th>
+                          <th>Current Stock</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.products.length > 0 ? (
+                          reportData.products.map(product => renderProductRow(product))
+                        ) : (
+                          <tr>
+                            <td colSpan="8" className="text-center">No products found</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </Table>
+                  </div>
+                </Card.Body>
+              </Card>
+            </div>
+          </>
         ) : isReportGenerated ? (
           <Card className="mb-4">
             <Card.Body>

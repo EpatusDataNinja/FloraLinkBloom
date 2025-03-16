@@ -152,8 +152,8 @@ export const generateProductPerformanceReport = async (req, res) => {
       const completedOrders = orders.filter(order => order.status === 'completed').length;
 
       return {
-        id: product.id,
-        name: product.name,
+      id: product.id,
+      name: product.name,
         category: {
           name: product.category?.name || 'Uncategorized'
         },
@@ -168,7 +168,7 @@ export const generateProductPerformanceReport = async (req, res) => {
         totalQuantitySold,
         totalRevenue,
         completedOrders,
-        lastStockUpdate: product.updatedAt
+      lastStockUpdate: product.updatedAt
       };
     }));
 
@@ -214,11 +214,155 @@ export const generateProductPerformanceReport = async (req, res) => {
 export const generateSeasonalTrendsReport = async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-    const data = await ReportsService.getSeasonalTrendsData(year);
+    
+    // Build date range for the year
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31, 23, 59, 59);
+
+    // Fetch orders with related data for the entire year
+    const orders = await Orders.findAll({
+      where: {
+        createdAt: {
+          [Op.between]: [startDate, endDate]
+        }
+      },
+      include: [
+        {
+          model: Products,
+          as: 'product',
+          include: [
+            {
+              model: Categories,
+              as: 'category'
+            }
+          ]
+        }
+      ],
+      order: [['createdAt', 'ASC']]
+    });
+
+    // Initialize monthly data
+    const monthlyData = Array.from({ length: 12 }, (_, index) => ({
+      month: index + 1,
+      totalSales: 0,
+      orderCount: 0,
+      products: {},
+      categories: {}
+    }));
+
+    // Process orders
+    orders.forEach(order => {
+      const month = new Date(order.createdAt).getMonth();
+      const totalAmount = parseFloat(order.totalAmount) || 0;
+      
+      // Update monthly totals
+      monthlyData[month].totalSales += totalAmount;
+      monthlyData[month].orderCount += 1;
+
+      // Track product performance
+      if (order.product) {
+        const productId = order.product.id;
+        if (!monthlyData[month].products[productId]) {
+          monthlyData[month].products[productId] = {
+            name: order.product.name,
+            quantity: 0,
+            revenue: 0
+          };
+        }
+        monthlyData[month].products[productId].quantity += order.quantity;
+        monthlyData[month].products[productId].revenue += totalAmount;
+
+        // Track category performance
+        if (order.product.category) {
+          const categoryId = order.product.category.id;
+          if (!monthlyData[month].categories[categoryId]) {
+            monthlyData[month].categories[categoryId] = {
+              name: order.product.category.name,
+              quantity: 0,
+              revenue: 0
+            };
+          }
+          monthlyData[month].categories[categoryId].quantity += order.quantity;
+          monthlyData[month].categories[categoryId].revenue += totalAmount;
+        }
+      }
+    });
+
+    // Calculate seasonal metrics
+    const seasons = {
+      spring: monthlyData.slice(2, 5),   // March to May
+      summer: monthlyData.slice(5, 8),   // June to August
+      autumn: monthlyData.slice(8, 11),  // September to November
+      winter: [...monthlyData.slice(11), ...monthlyData.slice(0, 2)] // December to February
+    };
+
+    const seasonalMetrics = {};
+    Object.entries(seasons).forEach(([season, months]) => {
+      seasonalMetrics[season] = {
+        totalSales: months.reduce((sum, month) => sum + month.totalSales, 0),
+        orderCount: months.reduce((sum, month) => sum + month.orderCount, 0),
+        averageOrderValue: 0,
+        topProducts: [],
+        topCategories: []
+      };
+
+      // Calculate average order value
+      if (seasonalMetrics[season].orderCount > 0) {
+        seasonalMetrics[season].averageOrderValue = 
+          seasonalMetrics[season].totalSales / seasonalMetrics[season].orderCount;
+      }
+
+      // Aggregate product data for the season
+      const productData = {};
+      months.forEach(month => {
+        Object.entries(month.products).forEach(([productId, data]) => {
+          if (!productData[productId]) {
+            productData[productId] = { ...data, quantity: 0, revenue: 0 };
+          }
+          productData[productId].quantity += data.quantity;
+          productData[productId].revenue += data.revenue;
+        });
+      });
+
+      // Get top products
+      seasonalMetrics[season].topProducts = Object.entries(productData)
+        .sort((a, b) => b[1].revenue - a[1].revenue)
+        .slice(0, 5)
+        .map(([_, data]) => data);
+
+      // Similar aggregation for categories
+      const categoryData = {};
+      months.forEach(month => {
+        Object.entries(month.categories).forEach(([categoryId, data]) => {
+          if (!categoryData[categoryId]) {
+            categoryData[categoryId] = { ...data, quantity: 0, revenue: 0 };
+          }
+          categoryData[categoryId].quantity += data.quantity;
+          categoryData[categoryId].revenue += data.revenue;
+        });
+      });
+
+      seasonalMetrics[season].topCategories = Object.entries(categoryData)
+        .sort((a, b) => b[1].revenue - a[1].revenue)
+        .slice(0, 5)
+        .map(([_, data]) => data);
+    });
+
     return res.status(200).json({
       success: true,
-      data: data
+      data: {
+        year,
+        monthlyData,
+        seasonalMetrics,
+        summary: {
+          totalSales: monthlyData.reduce((sum, month) => sum + month.totalSales, 0),
+          totalOrders: monthlyData.reduce((sum, month) => sum + month.orderCount, 0),
+          averageOrderValue: monthlyData.reduce((sum, month) => sum + month.totalSales, 0) / 
+                           monthlyData.reduce((sum, month) => sum + month.orderCount, 0) || 0
+        }
+      }
     });
+
   } catch (error) {
     console.error('Error in generateSeasonalTrendsReport:', error);
     return res.status(500).json({
@@ -232,13 +376,110 @@ export const generateSeasonalTrendsReport = async (req, res) => {
 export const generateStockPerishabilityReport = async (req, res) => {
   try {
     const threshold = parseInt(req.query.threshold) || 10;
-    const data = await ReportsService.getStockPerishabilityData(threshold);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Get all products with their categories and recent orders
+    const products = await Products.findAll({
+      include: [
+        {
+          model: Categories,
+          as: 'category',
+          attributes: ['name']
+        },
+        {
+          model: Orders,
+          as: 'orders',
+          where: {
+            createdAt: {
+              [Op.gte]: thirtyDaysAgo
+            }
+          },
+          attributes: ['quantity', 'createdAt', 'status'],
+          required: false // LEFT JOIN to include products with no orders
+        }
+      ],
+      where: {
+        status: 'In Stock' // Only include active products
+      }
+    });
+
+    // Process products and calculate metrics
+    const stockMetrics = products.map(product => {
+      // Calculate sales metrics
+      const completedOrders = (product.orders || []).filter(order => order.status === 'completed');
+      const totalSold = completedOrders.reduce((sum, order) => sum + order.quantity, 0);
+      const avgDailySales = totalSold / 30; // Average over 30 days
+      const daysUntilStockout = avgDailySales > 0 ? 
+        Math.floor(product.quantity / avgDailySales) : 
+        (product.quantity > 0 ? null : 0);
+
+      // Determine risk level
+      let perishabilityRisk;
+      if (product.quantity <= 0) {
+        perishabilityRisk = 'High';
+      } else if (daysUntilStockout === null || daysUntilStockout > threshold * 2) {
+        perishabilityRisk = avgDailySales === 0 ? 'Medium' : 'Low';
+      } else if (daysUntilStockout <= threshold) {
+        perishabilityRisk = 'High';
+      } else {
+        perishabilityRisk = 'Medium';
+      }
+
+      return {
+        id: product.id,
+        name: product.name,
+        category: product.category?.name || 'Uncategorized',
+        currentStock: product.quantity,
+        avgDailySales: parseFloat(avgDailySales.toFixed(2)),
+        daysUntilStockout,
+        perishabilityRisk,
+        lastUpdated: product.updatedAt
+      };
+    });
+
+    // Calculate summary statistics
+    const summary = {
+      highRisk: stockMetrics.filter(p => p.perishabilityRisk === 'High').length,
+      mediumRisk: stockMetrics.filter(p => p.perishabilityRisk === 'Medium').length,
+      lowRisk: stockMetrics.filter(p => p.perishabilityRisk === 'Low').length,
+      totalProducts: stockMetrics.length,
+      averageStock: stockMetrics.length > 0 ? 
+        Math.round(stockMetrics.reduce((sum, p) => sum + p.currentStock, 0) / stockMetrics.length) : 
+        0
+    };
+
+    // Sort metrics by risk level and stock status
+    const sortedMetrics = stockMetrics.sort((a, b) => {
+      const riskOrder = { High: 3, Medium: 2, Low: 1 };
+      const riskCompare = riskOrder[b.perishabilityRisk] - riskOrder[a.perishabilityRisk];
+      
+      if (riskCompare === 0) {
+        // If same risk level, sort by days until stockout (null values last)
+        if (a.daysUntilStockout === null && b.daysUntilStockout === null) return 0;
+        if (a.daysUntilStockout === null) return 1;
+        if (b.daysUntilStockout === null) return -1;
+        return a.daysUntilStockout - b.daysUntilStockout;
+      }
+      
+      return riskCompare;
+    });
+
     return res.status(200).json({
       success: true,
-      data: data
+      data: {
+        summary,
+        stockMetrics: sortedMetrics,
+        metadata: {
+          generatedAt: new Date(),
+          threshold,
+          daysAnalyzed: 30
+        }
+      }
     });
+
   } catch (error) {
-    console.error('Error in generateStockPerishabilityReport:', error);
+    console.error('Error generating stock perishability report:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to generate stock perishability report',
@@ -431,6 +672,94 @@ export const getRealtimeMetrics = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch realtime metrics',
+      error: error.message
+    });
+  }
+};
+
+export const generateStockReport = async (req, res) => {
+  try {
+    const threshold = parseInt(req.query.threshold) || 10;
+    
+    // Get all products with their categories and recent orders
+    const products = await Products.findAll({
+      include: [
+        {
+          model: Categories,
+          as: 'category',
+          attributes: ['name']
+        },
+        {
+          model: Orders,
+          as: 'orders',
+          attributes: ['quantity', 'createdAt'],
+          where: {
+            createdAt: {
+              [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
+            }
+          },
+          required: false
+        }
+      ]
+    });
+
+    // Calculate metrics for each product
+    const stockMetrics = products.map(product => {
+      const orders = product.orders || [];
+      const totalSold = orders.reduce((sum, order) => sum + order.quantity, 0);
+      const avgDailySales = totalSold / 30; // Based on 30 days
+      const daysUntilStockout = avgDailySales > 0 ? Math.floor(product.quantity / avgDailySales) : null;
+      
+      // Determine risk level
+      let perishabilityRisk;
+      if (daysUntilStockout === null || daysUntilStockout > threshold * 2) {
+        perishabilityRisk = 'Low';
+      } else if (daysUntilStockout <= threshold) {
+        perishabilityRisk = 'High';
+      } else {
+        perishabilityRisk = 'Medium';
+      }
+
+      return {
+        id: product.id,
+        name: product.name,
+        category: product.category?.name || 'Uncategorized',
+        currentStock: product.quantity,
+        avgDailySales: parseFloat(avgDailySales.toFixed(2)),
+        daysUntilStockout,
+        perishabilityRisk,
+        lastUpdated: product.updatedAt
+      };
+    });
+
+    // Calculate summary statistics
+    const summary = {
+      highRisk: stockMetrics.filter(p => p.perishabilityRisk === 'High').length,
+      mediumRisk: stockMetrics.filter(p => p.perishabilityRisk === 'Medium').length,
+      lowRisk: stockMetrics.filter(p => p.perishabilityRisk === 'Low').length,
+      totalProducts: stockMetrics.length,
+      averageStock: Math.round(
+        stockMetrics.reduce((sum, p) => sum + p.currentStock, 0) / stockMetrics.length
+      )
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        summary,
+        stockMetrics: stockMetrics.sort((a, b) => {
+          // Sort by risk level (High > Medium > Low)
+          const riskOrder = { High: 3, Medium: 2, Low: 1 };
+          return riskOrder[b.perishabilityRisk] - riskOrder[a.perishabilityRisk];
+        })
+      }
+    });
+
+  } catch (error) {
+    console.error('Error generating stock report:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to generate stock report',
       error: error.message
     });
   }

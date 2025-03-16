@@ -5,9 +5,10 @@ import ProductPerformanceReport from './ProductPerformanceReport';
 import SeasonalTrendsReport from './SeasonalTrendsReport';
 import StockPerishabilityReport from './StockPerishabilityReport';
 
-// Add some debug logging
-console.log('Importing SeasonalTrendsReport:', SeasonalTrendsReport);
+// Add debug logging
+console.log('index.js - StockPerishabilityReport imported:', StockPerishabilityReport);
 
+// Export all components
 export {
     UserActivityReport,
     ReportLayout,
@@ -16,3 +17,14 @@ export {
     SeasonalTrendsReport,
     StockPerishabilityReport
 };
+
+// Also provide default export
+export default {
+    UserActivityReport,
+    ReportLayout,
+    SalesReport,
+    ProductPerformanceReport,
+    SeasonalTrendsReport,
+    StockPerishabilityReport
+};
+

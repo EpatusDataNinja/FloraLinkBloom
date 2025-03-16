@@ -283,15 +283,15 @@ const SalesReport = () => {
             </Button>
           </div>
 
-          <Card>
-            <Card.Body>
-              <PrintableContent 
+        <Card>
+          <Card.Body>
+            <PrintableContent 
                 ref={pdfRef}
-                reportData={reportData} 
-                filters={filters} 
-              />
-            </Card.Body>
-          </Card>
+              reportData={reportData} 
+              filters={filters} 
+            />
+          </Card.Body>
+        </Card>
         </>
       )}
     </div>

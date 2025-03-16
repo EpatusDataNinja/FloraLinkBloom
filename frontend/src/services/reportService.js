@@ -11,21 +11,54 @@ const getAuthHeaders = () => ({
 class ReportService {
   async getStockReport(threshold) {
     try {
-      const token = localStorage.getItem('token');
+      if (!threshold || isNaN(threshold) || threshold < 1) {
+        throw new Error('Invalid threshold value');
+      }
+
       const response = await axios.get(
         `${BASE_URL}/api/${API_VERSION}/reports/stock`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Accept': 'application/json'
-          },
+          headers: getAuthHeaders(),
           params: { threshold }
         }
       );
-      return response.data;
+
+      if (!response.data) {
+        throw new Error('No data received from server');
+      }
+
+      const transformedData = {
+        success: true,
+        data: {
+          highRiskCount: response.data.data.summary.highRisk,
+          mediumRiskCount: response.data.data.summary.mediumRisk,
+          lowRiskCount: response.data.data.summary.lowRisk,
+          riskDistribution: {
+            highRisk: response.data.data.summary.highRisk,
+            mediumRisk: response.data.data.summary.mediumRisk,
+            lowRisk: response.data.data.summary.lowRisk
+          },
+          items: response.data.data.stockMetrics.map(item => ({
+            name: item.name,
+            category: item.category,
+            currentStock: item.currentStock,
+            daysUntilStockout: item.daysUntilStockout,
+            riskLevel: item.perishabilityRisk
+          }))
+        }
+      };
+
+      return transformedData;
     } catch (error) {
       console.error('Error in getStockReport:', error);
-      throw error;
+      if (error.response?.status === 404) {
+        throw new Error('Report endpoint not found. Please check API configuration.');
+      }
+      throw {
+        message: error.response?.data?.message || error.message || 'Failed to fetch stock report',
+        status: error.response?.status,
+        error
+      };
     }
   }
 
@@ -122,8 +155,21 @@ class ReportService {
     }
   }
 
-  async getSeasonalReport(year) {
-    return this.makeRequest('seasonal', { year });
+  async getSeasonalReport(year, season = 'all') {
+    try {
+      const response = await axios.get(
+        `${BASE_URL}/api/${API_VERSION}/reports/seasonal`,
+        {
+          headers: getAuthHeaders(),
+          params: { year, season }
+        }
+      );
+      console.log('Seasonal report response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error in getSeasonalReport:', error);
+      throw error;
+    }
   }
 
   async getStockPerishability(threshold) {

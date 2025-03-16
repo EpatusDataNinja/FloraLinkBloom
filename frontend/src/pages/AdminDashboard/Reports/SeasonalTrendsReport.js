@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Card, Form, Button, Spinner, Row, Col, Table, Tab, Tabs } from 'react-bootstrap';
+import { Card, Form, Button, Spinner, Row, Col, Table, Tab, Tabs, Alert } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import ReactToPrint from 'react-to-print';
 import {
@@ -12,9 +12,12 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import { Line, Bar, Pie } from 'react-chartjs-2';
 import { reportService } from '../../../services/reportService';
 import '../../../styles/ReportCommon.css';
+import { FaFilePdf } from 'react-icons/fa';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 // Register Chart.js components
 ChartJS.register(
@@ -55,7 +58,8 @@ const SalesChart = ({ data, year }) => {
 
   const chartData = {
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-    datasets: [{
+    datasets: [
+      {
       label: 'Monthly Sales (RWF)',
       data: data.monthlyData.map(month => month.totalSales),
       borderColor: 'rgb(53, 162, 235)',
@@ -63,13 +67,30 @@ const SalesChart = ({ data, year }) => {
       borderWidth: 2,
       tension: 0.3,
       pointRadius: 5,
-      pointHoverRadius: 7
-    }]
+        pointHoverRadius: 7,
+        yAxisID: 'y'
+      },
+      {
+        label: 'Order Count',
+        data: data.monthlyData.map(month => month.orderCount),
+        borderColor: 'rgb(255, 99, 132)',
+        backgroundColor: 'rgba(255, 99, 132, 0.5)',
+        borderWidth: 2,
+        tension: 0.3,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        yAxisID: 'y1'
+      }
+    ]
   };
 
   const options = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
     plugins: {
       legend: { position: 'top' },
       title: {
@@ -79,24 +100,38 @@ const SalesChart = ({ data, year }) => {
       },
       tooltip: {
         callbacks: {
-          label: (context) => `RWF ${context.parsed.y.toLocaleString()}`,
-          title: (tooltipItems) => {
-            const monthIndex = tooltipItems[0].dataIndex;
-            const month = data.monthlyData[monthIndex];
-            return `${chartData.labels[monthIndex]} ${year}\nOrders: ${month.orderCount}`;
+          label: (context) => {
+            if (context.datasetIndex === 0) {
+              return `Revenue: RWF ${context.parsed.y.toLocaleString()}`;
+            }
+            return `Orders: ${context.parsed.y}`;
           }
         }
       }
     },
     scales: {
       y: {
-        beginAtZero: true,
+        type: 'linear',
+        display: true,
+        position: 'left',
         title: {
           display: true,
-          text: 'Sales Amount (RWF)'
+          text: 'Revenue (RWF)'
         },
         ticks: {
           callback: (value) => `RWF ${value.toLocaleString()}`
+        }
+      },
+      y1: {
+        type: 'linear',
+        display: true,
+        position: 'right',
+        title: {
+          display: true,
+          text: 'Order Count'
+        },
+        grid: {
+          drawOnChartArea: false
         }
       }
     }
@@ -111,12 +146,7 @@ const SalesChart = ({ data, year }) => {
       {noSalesData && (
         <div className="alert alert-info mt-3">
           <i className="fas fa-info-circle me-2"></i>
-          No sales data available for {year}. This could mean:
-          <ul className="mb-0 mt-2">
-            <li>No orders were placed during this period</li>
-            <li>The selected year is in the future</li>
-            <li>Data is still being processed</li>
-          </ul>
+          No sales data available for {year}
         </div>
       )}
     </div>
@@ -305,6 +335,132 @@ const YearComparisonCard = ({ currentYear, previousYear }) => {
   );
 };
 
+const SeasonalAnalysisTable = ({ seasonalMetrics, selectedSeason }) => {
+  const formatCurrency = (value) => {
+    return typeof value === 'number' ? value.toLocaleString('en-US', {
+      style: 'currency',
+      currency: 'RWF'
+    }) : 'RWF 0.00';
+  };
+
+  // Filter metrics based on selected season
+  const filteredMetrics = selectedSeason === 'all' 
+    ? seasonalMetrics 
+    : {
+        [selectedSeason]: seasonalMetrics[selectedSeason] || {
+          totalSales: 0,
+          orderCount: 0,
+          averageOrderValue: 0,
+          topProducts: [],
+          topCategories: []
+        }
+      };
+
+  return (
+    <>
+      <div className="mb-3">
+        <h5>Analysis for: {selectedSeason === 'all' 
+          ? 'All Seasons' 
+          : RWANDA_SEASONS[selectedSeason]?.label || selectedSeason}
+        </h5>
+      </div>
+      <Table striped bordered hover>
+        <thead>
+          <tr>
+            <th>Season</th>
+            <th>Total Sales</th>
+            <th>Orders</th>
+            <th>Avg. Order Value</th>
+            <th>Top Products</th>
+            <th>Top Categories</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(filteredMetrics).map(([season, data]) => (
+            <tr key={season}>
+              <td className="text-capitalize">
+                {RWANDA_SEASONS[season]?.label || season}
+              </td>
+              <td>{formatCurrency(data.totalSales)}</td>
+              <td>{data.orderCount}</td>
+              <td>{formatCurrency(data.averageOrderValue)}</td>
+              <td>
+                {data.topProducts && data.topProducts.length > 0 ? (
+                  <ul className="list-unstyled mb-0">
+                    {data.topProducts.slice(0, 3).map((product, index) => (
+                      <li key={index}>
+                        {product.name} ({formatCurrency(product.revenue)})
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="text-muted">No products data</span>
+                )}
+              </td>
+              <td>
+                {data.topCategories && data.topCategories.length > 0 ? (
+                  <ul className="list-unstyled mb-0">
+                    {data.topCategories.slice(0, 3).map((category, index) => (
+                      <li key={index}>
+                        {category.name} ({formatCurrency(category.revenue)})
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="text-muted">No categories data</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+
+      {Object.keys(filteredMetrics).length === 0 && (
+        <Alert variant="info">
+          No data available for the selected season
+        </Alert>
+      )}
+    </>
+  );
+};
+
+const RWANDA_SEASONS = {
+  'Long Rainy': { months: [2, 3, 4], label: 'Long Rainy (Mar-May)' },
+  'Long Dry': { months: [5, 6, 7], label: 'Long Dry (Jun-Aug)' },
+  'Short Rainy': { months: [8, 9, 10], label: 'Short Rainy (Sep-Nov)' },
+  'Short Dry': { months: [11, 0, 1], label: 'Short Dry (Dec-Feb)' }
+};
+
+// Move getSeasonalBreakdown outside of components
+const getSeasonalBreakdown = (data, selectedSeason = 'all') => {
+  if (!data) return {};
+  
+  const seasonalData = {};
+  const seasonsToProcess = selectedSeason === 'all' 
+    ? Object.keys(RWANDA_SEASONS)
+    : [selectedSeason];
+
+  seasonsToProcess.forEach(season => {
+    const { months } = RWANDA_SEASONS[season];
+    const seasonMonths = data.monthlyData.filter((_, index) => months.includes(index));
+    
+    seasonalData[season] = {
+      totalSales: seasonMonths.reduce((sum, month) => sum + month.totalSales, 0),
+      orderCount: seasonMonths.reduce((sum, month) => sum + month.orderCount, 0),
+      products: seasonMonths.reduce((acc, month) => {
+        Object.entries(month.products || {}).forEach(([id, product]) => {
+          if (!acc[id]) acc[id] = { ...product, quantity: 0, revenue: 0 };
+          acc[id].quantity += product.quantity;
+          acc[id].revenue += product.revenue;
+        });
+        return acc;
+      }, {})
+    };
+  });
+  
+  return seasonalData;
+};
+
 const SeasonalTrendsReport = () => {
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
@@ -316,16 +472,27 @@ const SeasonalTrendsReport = () => {
     weatherImpact: [],
     inventoryOptimization: []
   });
+  const [error, setError] = useState(null);
+  const [selectedSeason, setSelectedSeason] = useState('');
+  const [activeTab, setActiveTab] = useState('overview');
+  const reportRef = useRef(null);
 
   const currentYear = new Date().getFullYear();
   const isFutureYear = selectedYear > currentYear;
 
   const generateReport = async () => {
+    // Validate season selection
+    if (!selectedSeason) {
+      toast.error('Please select a season first');
+      return;
+    }
+
     setLoading(true);
+    setError(null);
     try {
       const [currentYearResponse, previousYearResponse] = await Promise.all([
-        reportService.getSeasonalReport(selectedYear),
-        reportService.getSeasonalReport(selectedYear - 1)
+        reportService.getSeasonalReport(selectedYear, selectedSeason),
+        reportService.getSeasonalReport(selectedYear - 1, selectedSeason)
       ]);
 
       if (currentYearResponse.success && currentYearResponse.data) {
@@ -334,36 +501,135 @@ const SeasonalTrendsReport = () => {
         processSeasonalMetrics(currentYearResponse.data);
         toast.success('Report generated successfully');
       } else {
-        toast.error('Failed to generate report');
+        throw new Error(currentYearResponse.message || 'Failed to generate report');
       }
     } catch (error) {
       console.error('Error generating report:', error);
-      toast.error('Failed to generate report');
+      setError(error.message);
+      toast.error(error.message || 'Failed to generate report');
     } finally {
       setLoading(false);
     }
   };
 
   const processSeasonalMetrics = (data) => {
-    // Calculate seasonal metrics
-    const metrics = {
-      peakSeasons: analyzePeakSeasons(data),
-      productTrends: analyzeProductTrends(data),
-      weatherImpact: analyzeWeatherImpact(data),
-      inventoryOptimization: calculateInventoryOptimization(data)
-    };
+    const seasonalData = getSeasonalBreakdown(data, selectedSeason);
+    const metrics = {};
+    
+    Object.entries(seasonalData).forEach(([season, data]) => {
+      const totalSales = data.totalSales || 0;
+      const orderCount = data.orderCount || 0;
+      
+      // Process products data with their actual categories
+      const products = Object.values(data.products || {}).map(product => ({
+        name: product.name || 'Unnamed Product',
+        revenue: product.revenue || 0,
+        quantity: product.quantity || 0,
+        // Get category from the product's category object
+        category: product.category?.name || (product.categoryName) || 'Flowers' // Default to 'Flowers' instead of 'Other'
+      }));
+
+      // Sort products by revenue
+      const topProducts = products
+        .sort((a, b) => b.revenue - a.revenue)
+        .map(product => ({
+          name: product.name,
+          revenue: product.revenue,
+          quantity: product.quantity
+        }));
+
+      // Group products by category with proper category names
+      const categories = products.reduce((acc, product) => {
+        const categoryName = product.category;
+        if (!acc[categoryName]) {
+          acc[categoryName] = {
+            name: categoryName,
+            revenue: 0,
+            quantity: 0
+          };
+        }
+        acc[categoryName].revenue += product.revenue;
+        acc[categoryName].quantity += product.quantity;
+        return acc;
+      }, {});
+
+      // Sort categories by revenue and ensure proper naming
+      const topCategories = Object.values(categories)
+        .sort((a, b) => b.revenue - a.revenue)
+        .map(category => ({
+          name: category.name,
+          revenue: category.revenue,
+          quantity: category.quantity
+        }))
+        .filter(category => category.name !== 'Other'); // Filter out 'Other' category if present
+
+      metrics[season] = {
+        totalSales,
+        orderCount,
+        averageOrderValue: orderCount > 0 ? totalSales / orderCount : 0,
+        topProducts,
+        topCategories
+      };
+    });
+
     setSeasonalMetrics(metrics);
+  };
+
+  const handleGeneratePDF = async () => {
+    if (!reportData) return;
+
+    setLoading(true);
+    try {
+      const content = reportRef.current;
+      const canvas = await html2canvas(content, {
+        scale: 2,
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        windowWidth: content.scrollWidth,
+        windowHeight: content.scrollHeight
+      });
+      
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      });
+
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(
+        canvas.toDataURL('image/jpeg', 1.0),
+        'JPEG',
+        0,
+        0,
+        imgWidth,
+        imgHeight,
+        undefined,
+        'FAST'
+      );
+
+      pdf.save(`Seasonal_Trends_Report_${selectedYear}_${selectedSeason}.pdf`);
+      toast.success('PDF generated successfully');
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+      toast.error('Failed to generate PDF');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="report-container">
       <h2 className="mb-4">Seasonal Trends Analysis</h2>
       
-      {/* Year Selection Card */}
       <Card className="mb-4">
         <Card.Body>
           <Row>
-            <Col md={6}>
+            <Col md={4}>
               <Form.Group>
                 <Form.Label>Select Year</Form.Label>
                 <Form.Control
@@ -371,13 +637,27 @@ const SeasonalTrendsReport = () => {
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                   min="2000"
-                  max={currentYear + 1}
-                  className={isFutureYear ? 'border-warning' : ''}
+                  max={new Date().getFullYear()}
                 />
-                {isFutureYear && (
-                  <Form.Text className="text-warning">
-                    <i className="fas fa-exclamation-triangle me-1"></i>
-                    You are viewing data for a future year
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group>
+                <Form.Label>Select Season *</Form.Label>
+                <Form.Select
+                  value={selectedSeason}
+                  onChange={(e) => setSelectedSeason(e.target.value)}
+                  isInvalid={!selectedSeason}
+                >
+                  <option value="">Select a season</option>
+                  <option value="all">All Seasons</option>
+                  {Object.entries(RWANDA_SEASONS).map(([key, { label }]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </Form.Select>
+                {!selectedSeason && (
+                  <Form.Text className="text-danger">
+                    Please select a season to generate the report
                   </Form.Text>
                 )}
               </Form.Group>
@@ -386,192 +666,320 @@ const SeasonalTrendsReport = () => {
               <Button 
                 variant="primary"
                 onClick={generateReport} 
-                disabled={loading}
+                disabled={loading || !selectedSeason}
               >
-                  {loading ? (
-                    <>
-                      <Spinner animation="border" size="sm" /> Generating...
-                    </>
-                  ) : (
-                    'Generate Report'
-                  )}
-                </Button>
+                {loading ? (
+                  <>
+                    <Spinner animation="border" size="sm" /> Generating...
+                  </>
+                ) : (
+                  'Generate Report'
+                )}
+              </Button>
             </Col>
           </Row>
         </Card.Body>
       </Card>
 
-      {/* Charts Section */}
-      <Card className="mb-4">
-        <Card.Body>
-          {reportData && (
-            <div>
-              <h4 className="border-bottom pb-2">Monthly Sales Data</h4>
-              <ChartErrorBoundary>
-                <SalesChart data={reportData} year={selectedYear} />
-              </ChartErrorBoundary>
-            </div>
-          )}
-        </Card.Body>
-      </Card>
+      {error && (
+        <Alert variant="danger" className="mb-4">
+          {error}
+        </Alert>
+      )}
 
-      {reportData && previousYearData && (
-        <YearComparisonCard 
-          currentYear={reportData} 
-          previousYear={previousYearData} 
-        />
+      {!reportData && !loading && (
+        <Card>
+          <Card.Body className="text-center">
+            <p>Please select a season and generate the report to view the analysis.</p>
+          </Card.Body>
+        </Card>
       )}
 
       {reportData && (
-        <Tabs defaultActiveKey="overview" className="mb-4">
-          <Tab eventKey="overview" title="Sales Overview">
-            <Card className="mb-4">
-              <Card.Body>
-                <h4 className="border-bottom pb-2">Monthly Sales Trends</h4>
-                <ChartErrorBoundary>
-                  <SalesChart data={reportData} year={selectedYear} />
-                </ChartErrorBoundary>
-              </Card.Body>
-            </Card>
-          </Tab>
+        <>
+          <div className="d-flex justify-content-end mb-3">
+            <Button
+              variant="secondary"
+              onClick={handleGeneratePDF}
+              disabled={loading}
+              className="d-flex align-items-center gap-2"
+            >
+              <FaFilePdf /> Save as PDF
+            </Button>
+          </div>
 
-          <Tab eventKey="seasonal" title="Seasonal Analysis">
+          <div ref={reportRef}>
             <Card className="mb-4">
               <Card.Body>
-                <h4 className="border-bottom pb-2">Peak Season Analysis</h4>
-                {isFutureYear && (
-                  <div className="alert alert-info mb-3">
-                    <i className="fas fa-info-circle me-2"></i>
-                    Showing projected data for future planning. Based on historical patterns and industry trends.
+                <h4 className="border-bottom pb-2">Seasonal Overview</h4>
+                <Row>
+                  <Col md={3}>
+                    <div className="stat-card">
+                      <h6>Total Revenue</h6>
+                      <h3>RWF {selectedSeason === 'all' 
+                        ? reportData.summary.totalSales.toLocaleString()
+                        : Object.values(getSeasonalBreakdown(reportData, selectedSeason))
+                            .reduce((sum, season) => sum + season.totalSales, 0)
+                            .toLocaleString()
+                      }</h3>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div className="stat-card">
+                      <h6>Total Orders</h6>
+                      <h3>{selectedSeason === 'all'
+                        ? reportData.summary.totalOrders
+                        : Object.values(getSeasonalBreakdown(reportData, selectedSeason))
+                            .reduce((sum, season) => sum + season.orderCount, 0)
+                      }</h3>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div className="stat-card">
+                      <h6>Average Order Value</h6>
+                      <h3>RWF {(() => {
+                        if (selectedSeason === 'all') {
+                          return reportData.summary.averageOrderValue.toLocaleString();
+                        } else {
+                          const seasonData = getSeasonalBreakdown(reportData, selectedSeason);
+                          const totalSales = Object.values(seasonData)
+                            .reduce((sum, season) => sum + season.totalSales, 0);
+                          const totalOrders = Object.values(seasonData)
+                            .reduce((sum, season) => sum + season.orderCount, 0);
+                          return totalOrders > 0 
+                            ? (totalSales / totalOrders).toLocaleString()
+                            : '0';
+                        }
+                      })()}</h3>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div className="stat-card">
+                      <h6>Peak Season</h6>
+                      <h3>{selectedSeason === 'all'
+                        ? Object.entries(getSeasonalBreakdown(reportData))
+                            .sort((a, b) => b[1].totalSales - a[1].totalSales)[0]?.[0] || 'N/A'
+                        : RWANDA_SEASONS[selectedSeason]?.label || selectedSeason
+                      }</h3>
                   </div>
-                )}
-                <Row>
-                  <Col md={6}>
-                    <h5>Peak Seasons</h5>
-                    <Table striped bordered hover>
-                      <thead>
-                        <tr>
-                          <th>Season</th>
-                          <th>Popular Flowers</th>
-                          <th>Revenue Impact</th>
-                          <th>Growth vs Last Year</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {seasonalMetrics.peakSeasons.map((season, index) => (
-                          <tr key={index}>
-                            <td>{season.name}</td>
-                            <td>
-                              {Array.isArray(season.topFlowers) 
-                                ? season.topFlowers.join(', ') 
-                                : season.topFlowers}
-                            </td>
-                            <td>
-                              {typeof season.revenue === 'number' 
-                                ? `RWF ${season.revenue.toLocaleString()}` 
-                                : season.revenue}
-                            </td>
-                            <td>{season.growth}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </Table>
-                  </Col>
-                  <Col md={6}>
-                    <h5>Weather Impact</h5>
-                    <Table striped bordered hover>
-                      <thead>
-                        <tr>
-                          <th>Weather Condition</th>
-                          <th>Impact on Sales</th>
-                          <th>Affected Products</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {seasonalMetrics.weatherImpact.map((impact, index) => (
-                          <tr key={index}>
-                            <td>{impact.condition}</td>
-                            <td>{impact.impact}</td>
-                            <td>{impact.affectedProducts.join(', ')}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </Table>
                   </Col>
                 </Row>
               </Card.Body>
             </Card>
-          </Tab>
 
-          <Tab eventKey="inventory" title="Inventory Insights">
-            <Card className="mb-4">
-              <Card.Body>
-                <h4 className="border-bottom pb-2">Seasonal Inventory Optimization</h4>
-                <Row>
-                  <Col md={12}>
-                    <Table striped bordered hover>
-                      <thead>
-                        <tr>
-                          <th>Product Category</th>
-                          <th>Recommended Stock Level</th>
-                          <th>Peak Season</th>
-                          <th>Storage Requirements</th>
-                          <th>Shelf Life</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {seasonalMetrics.inventoryOptimization.map((item, index) => (
-                          <tr key={index}>
-                            <td>{item.category}</td>
-                            <td>{item.recommendedStock}</td>
-                            <td>{item.peakSeason}</td>
-                            <td>{item.storageRequirements}</td>
-                            <td>{item.shelfLife}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </Table>
-                  </Col>
-                </Row>
-              </Card.Body>
-            </Card>
-          </Tab>
+            <Tabs
+              activeKey={activeTab}
+              onSelect={(k) => setActiveTab(k)}
+              className="mb-4"
+            >
+              <Tab eventKey="overview" title="Sales Trends">
+                <Card>
+                  <Card.Body>
+                    <ChartErrorBoundary>
+                      <SalesChart data={reportData} year={selectedYear} />
+                    </ChartErrorBoundary>
+                  </Card.Body>
+                </Card>
+              </Tab>
 
-          <Tab eventKey="trends" title="Product Trends">
-          <Card className="mb-4">
+              <Tab eventKey="seasonal" title="Seasonal Analysis">
+                <Card>
+                  <Card.Body>
+                    <SeasonalAnalysisTable 
+                      seasonalMetrics={seasonalMetrics}
+                      selectedSeason={selectedSeason}
+                    />
+                  </Card.Body>
+                </Card>
+              </Tab>
+
+              <Tab eventKey="market" title="Market Insights">
+                <Card>
+                  <Card.Body>
+                    <MarketInsightsSection 
+                      data={reportData}
+                      selectedSeason={selectedSeason}
+                    />
+                  </Card.Body>
+                </Card>
+              </Tab>
+            </Tabs>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+const MarketInsightsSection = ({ data, selectedSeason }) => {
+  const allSeasonalData = getSeasonalBreakdown(data);
+  
+  // Filter data based on selected season
+  const filteredData = selectedSeason === 'all' 
+    ? allSeasonalData 
+    : { [selectedSeason]: allSeasonalData[selectedSeason] };
+
+  // Prepare data for Revenue Bar Chart
+  const revenueChartData = {
+    labels: Object.entries(filteredData).map(([season, _]) => RWANDA_SEASONS[season]?.label || season),
+    datasets: [
+      {
+        label: 'Revenue',
+        data: Object.values(filteredData).map(season => season.totalSales),
+        backgroundColor: [
+          'rgba(54, 162, 235, 0.7)',
+          'rgba(255, 99, 132, 0.7)',
+          'rgba(75, 192, 192, 0.7)',
+          'rgba(255, 206, 86, 0.7)'
+        ],
+        borderColor: [
+          'rgba(54, 162, 235, 1)',
+          'rgba(255, 99, 132, 1)',
+          'rgba(75, 192, 192, 1)',
+          'rgba(255, 206, 86, 1)'
+        ],
+        borderWidth: 2,
+        borderRadius: 8
+      }
+    ]
+  };
+
+  // Prepare data for Orders Pie Chart
+  const ordersPieData = {
+    labels: Object.entries(filteredData).map(([season, _]) => RWANDA_SEASONS[season]?.label || season),
+    datasets: [
+      {
+        data: Object.values(filteredData).map(season => season.orderCount),
+        backgroundColor: [
+          'rgba(54, 162, 235, 0.8)',
+          'rgba(255, 99, 132, 0.8)',
+          'rgba(75, 192, 192, 0.8)',
+          'rgba(255, 206, 86, 0.8)'
+        ],
+        borderColor: '#ffffff',
+        borderWidth: 2
+      }
+    ]
+  };
+
+  return (
+    <div className="market-insights">
+      <Row className="mb-4">
+        <Col md={12}>
+          <Card className="chart-card">
             <Card.Body>
-                <h4 className="border-bottom pb-2">Seasonal Product Performance</h4>
-                <Row>
-                  <Col md={12}>
-                    <Table striped bordered hover>
-                      <thead>
-                        <tr>
-                          <th>Product</th>
-                          <th>Best Selling Season</th>
-                          <th>Average Price</th>
-                          <th>Demand Trend</th>
-                          <th>Quality Retention</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {seasonalMetrics.productTrends.map((product, index) => (
-                          <tr key={index}>
-                            <td>{product.name}</td>
-                            <td>{product.bestSeason}</td>
-                            <td>RWF {product.avgPrice.toLocaleString()}</td>
-                            <td>{product.demandTrend}</td>
-                            <td>{product.qualityRetention}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </Table>
-                  </Col>
-                </Row>
+              <h5 className="text-center mb-4">Revenue Distribution by Season</h5>
+              <div className="chart-container">
+                <Bar
+                  data={revenueChartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        titleFont: { size: 14 },
+                        bodyFont: { size: 13 },
+                        callbacks: {
+                          label: (context) => `Revenue: RWF ${context.raw.toLocaleString()}`
+                        }
+                      }
+                    },
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        grid: {
+                          color: 'rgba(0,0,0,0.05)'
+                        },
+                        ticks: {
+                          callback: (value) => `RWF ${value.toLocaleString()}`
+                        }
+                      },
+                      x: {
+                        grid: {
+                          display: false
+                        }
+                      }
+                    }
+                  }}
+                />
+              </div>
             </Card.Body>
           </Card>
-          </Tab>
-        </Tabs>
-        )}
+        </Col>
+      </Row>
+
+      <Row>
+        <Col md={6}>
+          <Card className="chart-card">
+            <Card.Body>
+              <h5 className="text-center mb-4">Order Distribution</h5>
+              <div className="chart-container-small">
+                <Pie
+                  data={ordersPieData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: 'bottom',
+                        labels: {
+                          padding: 20,
+                          usePointStyle: true,
+                          pointStyle: 'circle'
+                        }
+                      },
+                      tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        callbacks: {
+                          label: (context) => `Orders: ${context.raw}`
+                        }
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col md={6}>
+          <Card className="seasonal-metrics-card">
+            <Card.Body>
+              <h5 className="text-center mb-4">Seasonal Performance</h5>
+              <div className="seasonal-metrics-grid">
+                {Object.entries(filteredData).map(([season, data]) => (
+                  <div key={season} className="seasonal-metric-item">
+                    <div className="metric-header">
+                      <h6>{RWANDA_SEASONS[season]?.label || season}</h6>
+                      <span className={`status-badge ${data.totalSales > 0 ? 'active' : 'inactive'}`}>
+                        {data.totalSales > 0 ? 'Active' : 'No Data'}
+                      </span>
+                    </div>
+                    <div className="metric-body">
+                      <div className="metric-value-item">
+                        <i className="fas fa-chart-line"></i>
+                        <div>
+                          <span className="label">Revenue</span>
+                          <span className="value">RWF {data.totalSales.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <div className="metric-value-item">
+                        <i className="fas fa-shopping-cart"></i>
+                        <div>
+                          <span className="label">Orders</span>
+                          <span className="value">{data.orderCount}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 };

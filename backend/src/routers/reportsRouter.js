@@ -11,7 +11,7 @@ router.use(verifyToken);
 router.get("/sales", ReportsController.generateSalesReport);
 router.get("/products", ReportsController.generateProductPerformanceReport);
 router.get("/seasonal", ReportsController.generateSeasonalTrendsReport);
-router.get("/stock", ReportsController.generateStockPerishabilityReport);
+router.get("/stock", ReportsController.generateStockReport);
 router.get("/users", ReportsController.generateUserActivityReport);
 
 // Dashboard summary
