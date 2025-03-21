@@ -14,6 +14,11 @@
         padding: 15px;
         border-radius: 5px;
       }
+      .notification-title {
+        font-weight: bold;
+        color: #2c5282;
+        margin-bottom: 10px;
+      }
       a {
         color: green;
       }
@@ -21,11 +26,14 @@
   </head>
   <body>
     <div class="email-container">
-      <h4> FloraLink Platform</h4>
+      <h4>FloraLink Platform</h4>
       <p>Hello <%= firstname %>,</p><br />
-      <p> <%= message %></p>
+      <% if (title) { %>
+        <p class="notification-title"><%= title %></p>
+      <% } %>
+      <p><%= message %></p>
 
-      <p>For more information go in sytem to view all in details </p>
+      <p>For more information go in system to view all in details</p>
 
       <p>If you need help, contact us at here.</p>
       <p>Regards,<br /><br /></p>

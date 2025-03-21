@@ -12,11 +12,14 @@ module.exports = (sequelize, DataTypes) => {
       title: DataTypes.STRING,
       message: DataTypes.TEXT,
       type: DataTypes.STRING,
-      isRead: { type: DataTypes.BOOLEAN, defaultValue: false }, // New field
+      isRead: { type: DataTypes.BOOLEAN, defaultValue: false }
     },
     {
       sequelize,
       modelName: "Notifications",
+      defaultScope: {
+        order: [['createdAt', 'DESC']]
+      }
     }
   );
   return Notifications;

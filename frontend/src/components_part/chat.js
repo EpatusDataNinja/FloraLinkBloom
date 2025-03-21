@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Image from './user.png';
 import Title from "./TitleCard";
 import LoadingSpinner from './loading';
+import { Badge } from 'react-bootstrap';
+import '../css/Chat.css';
+import { FaFile, FaImage, FaVideo, FaVolumeUp, FaPaperclip } from 'react-icons/fa';
+import { useLocation, useNavigate } from 'react-router-dom';
+
 const fetchUsers = async (token, role) => {
   const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/users`, {
     method: 'GET',
@@ -14,41 +20,55 @@ const fetchUsers = async (token, role) => {
 
   const data = await response.json();
   if (data.success) {
-    return data.users.filter(user => user.role !== role);  // Filter users based on role
+    return data.users.filter(user => user.role !== role);
   }
-
   return [];
 };
 
 const fetchMessages = async (token, receiverId) => {
-  const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/message/${receiverId}`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'accept': '*/*'
+  if (!token || !receiverId) return [];
+  
+  const response = await fetch(
+    `${process.env.REACT_APP_BASE_URL}/api/v1/message/${receiverId}`,
+    {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'accept': '*/*'
+      }
     }
-  });
+  );
 
   const data = await response.json();
   return data.success ? data.data : [];
 };
 
-const sendMessage = async (token, receiverId, message) => {
-  const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/message/add/${receiverId}`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'accept': '*/*'
-    },
-    body: JSON.stringify({ message })
-  });
+const sendMessage = async (token, receiverId, messageData) => {
+  try {
+    const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/message/add/${receiverId}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'accept': '*/*'
+      },
+      body: JSON.stringify({ 
+        message: messageData.message,
+        replyTo: messageData.replyTo 
+      })
+    });
 
-  const data = await response.json();
-  return data.success ? data.Message : null;
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.message || 'Failed to send message');
+    }
+    return data.Message;
+  } catch (error) {
+    console.error('Error sending message:', error);
+    throw error;
+  }
 };
 
-// Function to display time in 'x minutes ago' format
 const formatTimeAgo = (date) => {
   const now = new Date();
   const diffInSeconds = Math.floor((now - new Date(date)) / 1000);
@@ -62,157 +82,860 @@ const formatTimeAgo = (date) => {
   return 'Just now';
 };
 
+const validateImageUrl = (imageUrl, defaultImage) => {
+  if (!imageUrl || imageUrl === 'undefined' || imageUrl === 'null') {
+    return defaultImage;
+  }
+  return imageUrl;
+};
+
+const isMessageDuplicate = (messages, newMessage) => {
+  return messages.some(msg => 
+    msg.id === newMessage.id || 
+    (msg.message === newMessage.message && 
+     msg.senderId === newMessage.senderId && 
+     msg.createdAt === newMessage.createdAt)
+  );
+};
+
+const MessageStatus = {
+  SENT: 'sent',
+  DELIVERED: 'delivered',
+  READ: 'read'
+};
+
+const MessageActions = ({ message, onReply, onDelete, onClose }) => {
+  return (
+    <div className="message-menu">
+      <button onClick={() => {
+        onReply(message);
+        onClose();
+      }}>
+        Reply
+      </button>
+      <button onClick={() => {
+        onDelete(message.id);
+        onClose();
+      }}>
+        Delete
+      </button>
+    </div>
+  );
+};
+
 const Chat = () => {
   const [users, setUsers] = useState([]);
   const [messages, setMessages] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [selectedUserName, setSelectedUserName] = useState('');  // Store selected user's name
+  const [selectedUserName, setSelectedUserName] = useState('');
   const [messageInput, setMessageInput] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState(new Set());
+  const [unreadMessages, setUnreadMessages] = useState({});
+  const [typing, setTyping] = useState(false);
+  const [isOnline, setIsOnline] = useState(false);
+  const [messageStatuses, setMessageStatuses] = useState({});
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showMessageMenu, setShowMessageMenu] = useState(null);
+  
+  const socketRef = useRef();
+  const messagesEndRef = useRef(null);
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  const user = JSON.parse(localStorage.getItem('user')); // Get logged-in user from localStorage
-  const token = localStorage.getItem('token'); // Get auth token from localStorage
+  const user = JSON.parse(localStorage.getItem('user'));
+  const token = localStorage.getItem('token');
 
   useEffect(() => {
-    if (user && token) {
-      const loadUsers = async () => {
-        const fetchedUsers = await fetchUsers(token, user.role);
-        setUsers(fetchedUsers);
-        setLoading(false);
-      };
-
-      loadUsers();
+    if (!token || !user) {
+      setError('Please log in to access chat');
+      setLoading(false);
+      return;
     }
-  }, [user, token]);
 
-  const handleUserSelect = async (receiverId, firstName, lastName) => {
-    setSelectedUser(receiverId);
-    setSelectedUserName(`${firstName} ${lastName}`);  // Set selected user's name
-    const userMessages = await fetchMessages(token, receiverId);
-    setMessages(userMessages);
+    const loadUsers = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log('Fetching users...');
+        const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/users`, {
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'accept': '*/*'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch users');
+        }
+        
+        const data = await response.json();
+        console.log('Fetched users data:', data);
+        
+        if (data.success) {
+          // Filter users based on role and current user
+          const filteredUsers = data.users.filter(u => 
+            u.role !== 'admin' && 
+            u.id !== user?.id &&
+            (user?.role === 'buyer' ? u.role === 'seller' : 
+             user?.role === 'seller' ? u.role === 'buyer' : true)
+          );
+          console.log('Filtered users:', filteredUsers);
+          setUsers(filteredUsers);
+        } else {
+          throw new Error(data.message || 'Failed to fetch users');
+        }
+      } catch (error) {
+        console.error('Error loading users:', error);
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUsers();
+  }, [token, user?.id, user?.role]);
+
+  useEffect(() => {
+    if (selectedUser) {
+      fetchMessages();
+    }
+  }, [selectedUser]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    const reconnectDelay = 3000;
+
+    try {
+      socketRef.current = io(process.env.REACT_APP_BASE_URL, {
+        auth: { token },
+        reconnection: true,
+        reconnectionAttempts: maxReconnectAttempts,
+        reconnectionDelay: reconnectDelay,
+        timeout: 10000,
+        transports: ['websocket', 'polling']
+      });
+
+      socketRef.current.on('connect', () => {
+        console.log('Connected to socket server');
+        setIsOnline(true);
+        reconnectAttempts = 0;
+      });
+
+      socketRef.current.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+        setIsOnline(false);
+      });
+
+      socketRef.current.on('disconnect', (reason) => {
+        console.log('Socket disconnected:', reason);
+        setIsOnline(false);
+      });
+
+      socketRef.current.on('reconnect_attempt', (attemptNumber) => {
+        console.log('Attempting to reconnect:', attemptNumber);
+        reconnectAttempts = attemptNumber;
+      });
+
+      socketRef.current.on('reconnect_failed', () => {
+        console.error('Failed to reconnect after', maxReconnectAttempts, 'attempts');
+        setError('Connection lost. Please refresh the page.');
+      });
+
+      socketRef.current.on('userOnline', (userId) => {
+        setOnlineUsers(prev => new Set([...prev, userId]));
+      });
+
+      socketRef.current.on('userOffline', (userId) => {
+        setOnlineUsers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(userId);
+          return newSet;
+        });
+      });
+
+      socketRef.current.on('typing', ({ senderId }) => {
+        if (selectedUser?.id === senderId) {
+          setTyping(true);
+          setTimeout(() => setTyping(false), 3000);
+        }
+      });
+
+      socketRef.current.on('messageRead', ({ messageId }) => {
+        setMessages(prev => prev.map(msg => 
+          msg.id === messageId ? { ...msg, isRead: true } : msg
+        ));
+      });
+
+      socketRef.current.on('newMessage', (message) => {
+        console.log('Received new message:', message);
+        setMessages(prev => {
+          if (isMessageDuplicate(prev, message)) {
+            return prev;
+          }
+          return [...prev, message];
+        });
+
+        if (selectedUser?.id === message.senderId) {
+          socketRef.current.emit('messageRead', {
+            messageId: message.id,
+            senderId: message.senderId
+          });
+        }
+      });
+
+      socketRef.current.on('messageSent', (message) => {
+        console.log('Message sent confirmation:', message);
+        setMessages(prev => {
+          if (isMessageDuplicate(prev, message)) {
+            return prev;
+          }
+          return [...prev, message];
+        });
+      });
+
+      socketRef.current.on('messageError', (error) => {
+        console.error('Message error:', error);
+      });
+
+      socketRef.current.on('messageDelivered', ({ messageId }) => {
+        setMessages(prev => prev.map(msg => 
+          msg.id === messageId 
+            ? { ...msg, status: MessageStatus.DELIVERED }
+            : msg
+        ));
+      });
+
+      socketRef.current.on('messageRead', ({ messageId }) => {
+        setMessages(prev => prev.map(msg => 
+          msg.id === messageId 
+            ? { ...msg, status: MessageStatus.READ }
+            : msg
+        ));
+      });
+
+      socketRef.current.on('chatHistoryUpdate', async ({ userId }) => {
+        if (userId === user.id) {
+          try {
+            const response = await fetch(
+              `${process.env.REACT_APP_BASE_URL}/api/v1/message/history`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'accept': '*/*'
+                }
+              }
+            );
+
+            const data = await response.json();
+            if (data.success) {
+              setChatHistory(data.data);
+            }
+          } catch (error) {
+            console.error('Error updating chat history:', error);
+          }
+        }
+      });
+
+      socketRef.current.on('heartbeat', () => {
+        socketRef.current.emit('heartbeat-ack');
+      });
+
+      const heartbeat = setInterval(() => {
+        if (socketRef.current.connected) {
+          socketRef.current.emit('heartbeat');
+        }
+      }, 30000);
+
+      socketRef.current.on('disconnect', () => {
+        clearInterval(heartbeat);
+        console.log('Socket disconnected');
+        setIsOnline(false);
+      });
+
+      return () => {
+        if (socketRef.current) {
+          socketRef.current.disconnect();
+        }
+      };
+    } catch (error) {
+      console.error('Socket initialization error:', error);
+      setError('Failed to connect to chat server');
+    }
+  }, [token, selectedUser?.id]);
+
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      if (!token) return;
+      
+      try {
+        setLoadingHistory(true);
+        console.log('Fetching chat history...');
+        const response = await fetch(
+          `${process.env.REACT_APP_BASE_URL}/api/v1/message/history`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'accept': '*/*'
+            }
+          }
+        );
+
+        const data = await response.json();
+        console.log('Chat history response:', data);
+        
+        if (data.success) {
+          // Ensure we're setting the chat history with the correct data structure
+          const formattedHistory = data.data.map(chat => ({
+            lastMessage: chat.lastMessage,
+            unreadCount: chat.unreadCount,
+            otherUser: chat.otherUser,
+            totalMessages: chat.totalMessages
+          }));
+          console.log('Formatted chat history:', formattedHistory);
+          setChatHistory(formattedHistory);
+        } else {
+          console.error('Failed to fetch chat history:', data.message);
+        }
+      } catch (error) {
+        console.error('Error loading chat history:', error);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
+    loadChatHistory();
+  }, [token]);
+
+  useEffect(() => {
+    if (location.state?.selectedUserId) {
+      const selectedUser = users.find(user => user.id === location.state.selectedUserId);
+      if (selectedUser) {
+        handleUserSelect(selectedUser);
+        // Clear the navigation state
+        navigate(location.pathname, { replace: true });
+      }
+    }
+  }, [location.state, users]);
+
+  if (error) {
+    return (
+      <div className="chat-error">
+        <h3>Error</h3>
+        <p>{error}</p>
+        <button onClick={() => window.location.reload()}>Retry</button>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  const handleUserSelect = async (selectedUser) => {
+    setSelectedUser(selectedUser);
+    setSelectedUserName(`${selectedUser.firstname} ${selectedUser.lastname}`);
+    
+    try {
+      const messages = await fetchMessages(token, selectedUser.id);
+      setMessages(messages.map(msg => ({
+        ...msg,
+        status: msg.isRead ? MessageStatus.READ : 
+                (msg.isDelivered ? MessageStatus.DELIVERED : MessageStatus.SENT)
+      })));
+    
+      setUnreadMessages(prev => ({
+        ...prev,
+        [selectedUser.id]: 0
+      }));
+
+      if (messages.length > 0) {
+        socketRef.current.emit('messageRead', {
+          senderId: selectedUser.id,
+          messageId: messages[messages.length - 1]?.id
+        });
+      }
+
+      // Update chat history to reflect read status
+      setChatHistory(prev => prev.map(chat => 
+        chat.otherUser.id === selectedUser.id 
+          ? { ...chat, unreadCount: 0 }
+          : chat
+      ));
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
+  };
+
+  const handleReply = (message) => {
+    setReplyingTo(message);
+    setMessageInput('');
+    document.querySelector('.message-input').focus();
   };
 
   const handleMessageSend = async () => {
-    if (selectedUser && messageInput.trim() !== '') {
-      const newMessage = await sendMessage(token, selectedUser, messageInput);
-      if (newMessage) {
-        setMessages(prevMessages => [...prevMessages, newMessage]);
-        setMessageInput(''); // Clear the input field
-      }
+    if (!selectedUser || !messageInput.trim()) return;
+
+    try {
+      const messageData = {
+        message: messageInput,
+        replyTo: replyingTo?.id
+      };
+
+      const newMessage = await sendMessage(token, selectedUser.id, messageData);
+      
+      setMessages(prev => [...prev, {
+        ...newMessage,
+        status: MessageStatus.SENT,
+        senderId: user.id,
+        receiverId: selectedUser.id,
+        createdAt: new Date().toISOString(),
+        replyTo: replyingTo?.id
+      }]);
+      
+      setMessageInput('');
+      setReplyingTo(null);
+
+      socketRef.current.emit('sendMessage', {
+        receiverId: selectedUser.id,
+        senderId: user.id,
+        message: newMessage
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
     }
   };
 
-  // Check if user is logged in
-  if (!user || !token) {
-    return <p>Please log in first.</p>;
-  }
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleMessageSend();
+    }
+  };
+
+  const handleFileSelect = (event) => {
+    setSelectedFile(event.target.files[0]);
+  };
+
+  const handleMediaUpload = async () => {
+    if (!selectedFile) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('media', selectedFile);
+    formData.append('message', messageInput);
+
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_BASE_URL}/api/v1/message/upload/${selectedUser.id}`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        setMessages(prev => [...prev, data.Message]);
+        setSelectedFile(null);
+        setMessageInput('');
+        
+        socketRef.current.emit('sendMedia', {
+          receiverId: selectedUser.id,
+          message: data.Message
+        });
+      }
+    } catch (error) {
+      console.error('Error uploading media:', error);
+      setError('Failed to upload media');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const uniqueMessages = Array.from(new Map(
+    messages.map(msg => [msg.id, msg])
+  ).values());
+
+  const renderMessageStatus = (message) => {
+    if (message.senderId !== user.id) return null;
+    
+    switch (message.status) {
+      case MessageStatus.READ:
+        return <span className="message-status read">✓✓</span>;
+      case MessageStatus.DELIVERED:
+        return <span className="message-status delivered">✓✓</span>;
+      case MessageStatus.SENT:
+      default:
+        return <span className="message-status sent">✓</span>;
+    }
+  };
+
+  const renderMediaMessage = (message) => {
+    switch (message.mediaType) {
+      case 'image':
+        return (
+          <img 
+            src={process.env.REACT_APP_BASE_URL + message.mediaUrl} 
+            alt="Shared image" 
+            className="media-preview"
+          />
+        );
+      case 'video':
+        return (
+          <video controls className="media-preview">
+            <source src={process.env.REACT_APP_BASE_URL + message.mediaUrl} />
+          </video>
+        );
+      case 'audio':
+        return (
+          <audio controls>
+            <source src={process.env.REACT_APP_BASE_URL + message.mediaUrl} />
+          </audio>
+        );
+      case 'document':
+        return (
+          <a 
+            href={process.env.REACT_APP_BASE_URL + message.mediaUrl} 
+            download={message.fileName}
+            className="document-link"
+          >
+            <FaFile /> {message.fileName}
+          </a>
+        );
+      default:
+        return <p>{message.message}</p>;
+    }
+  };
+
+  const handleSearch = async (query) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      setIsSearching(true);
+      const response = await fetch(
+        `${process.env.REACT_APP_BASE_URL}/api/v1/message/search/${query}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'accept': '*/*'
+          }
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        setSearchResults(data.messages);
+      }
+    } catch (error) {
+      console.error('Error searching messages:', error);
+      setError('Failed to search messages');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleDeleteClick = async (messageId) => {
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_BASE_URL}/api/v1/message/${messageId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'accept': '*/*'
+          }
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        setMessages(prev => prev.filter(msg => msg.id !== messageId));
+      }
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      setError('Failed to delete message');
+    }
+  };
 
   return (
-    <div className="container my-4">
-      <div className="row">
-        {/* User List */}
-        <div className="col-md-3">
-          
-          <Title title={'List of users'}/>
-          {loading ? (
-            <LoadingSpinner/>
-          ) : (
-            users.length > 0 ? (
-              <ul className="list-group">
-                {users.map((user) => (
-                  <li
-                    key={user.id}
-                    className="list-group-item d-flex align-items-center"
-                    onClick={() => handleUserSelect(user.id, user.firstname, user.lastname)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <img
-                      src={user.image || Image }
-                      alt={user.firstname}
-                      className="rounded-circle"
-                      width="40"
-                      height="40"
+    <div className="chat-container">
+        <div className="user-list">
+            <div className="user-list-header">
+                <div className="current-user">
+                    <img 
+                        src={validateImageUrl(user?.image, Image)} 
+                        alt="profile" 
+                        className="user-avatar-img"
                     />
-                    <span className="ml-2 m-2">{user.firstname} {user.lastname}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No users available.</p>
-            )
-          )}
+                    <h3>Messages</h3>
+                </div>
+                <div className="search-box">
+                    <input type="text" placeholder="Search chats..." />
+                </div>
+            </div>
+
+            <div className="users-container">
+              {loadingHistory ? (
+                <LoadingSpinner />
+              ) : (
+                <>
+                  {/* Chat History Section */}
+                  <div className="chat-section">
+                    <h4 className="section-title">Recent Chats</h4>
+                    {chatHistory && chatHistory.length > 0 ? (
+                      chatHistory.map(({ lastMessage, unreadCount, otherUser, totalMessages }) => (
+                        <div
+                          key={otherUser.id}
+                          className={`user-item ${
+                            selectedUser?.id === otherUser.id ? 'active' : ''
+                          } ${unreadCount > 0 ? 'unread' : ''}`}
+                          onClick={() => handleUserSelect(otherUser)}
+                        >
+                          <div className="user-avatar">
+                            <img
+                              src={validateImageUrl(otherUser.image, Image)}
+                              alt={otherUser.firstname}
+                              className="user-avatar-img"
+                            />
+                            <span className={`status-indicator ${
+                              onlineUsers.has(otherUser.id) ? 'online' : 'offline'
+                            }`}></span>
+                          </div>
+                          <div className="user-info">
+                            <div className="user-header">
+                              <h4 className="user-name">
+                                {`${otherUser.firstname} ${otherUser.lastname}`}
+                              </h4>
+                              <span className="message-time">
+                                {formatTimeAgo(lastMessage.createdAt)}
+                              </span>
+                            </div>
+                            <div className="message-preview">
+                              <p className="last-message">
+                                {lastMessage.mediaType !== 'text' ? 
+                                  `Sent ${lastMessage.mediaType}` : 
+                                  lastMessage.message.substring(0, 30)}
+                                {lastMessage.message.length > 30 ? '...' : ''}
+                              </p>
+                              {unreadCount > 0 && (
+                                <span className="unread-badge">{unreadCount}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="no-chats">
+                        <p>No conversations yet</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Available Users Section */}
+                  <div className="chat-section">
+                    <h4 className="section-title">
+                      {user?.role === 'buyer' ? 'Available Sellers' : 'Available Buyers'}
+                    </h4>
+                    {users && users.length > 0 ? (
+                      users.map((user) => (
+                        <div
+                          key={user.id}
+                          className={`user-item ${
+                            selectedUser?.id === user.id ? 'active' : ''
+                          }`}
+                          onClick={() => handleUserSelect(user)}
+                        >
+                          <div className="user-avatar">
+                            <img
+                              src={validateImageUrl(user.image, Image)}
+                              alt={user.firstname}
+                              className="user-avatar-img"
+                            />
+                            <span className={`status-indicator ${
+                              onlineUsers.has(user.id) ? 'online' : 'offline'
+                            }`}></span>
+                          </div>
+                          <div className="user-info">
+                            <div className="user-header">
+                              <h4 className="user-name">
+                                {`${user.firstname} ${user.lastname}`}
+                              </h4>
+                            </div>
+                            <div className="message-preview">
+                              <p className="user-role">
+                                {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="no-chats">
+                        <p>No {user?.role === 'buyer' ? 'sellers' : 'buyers'} available</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
         </div>
      
-
-        {/* Chat Box */}
-        {selectedUser && (
-          <>
-             <br/>
-          <div className="col-md-9">
-            <div className="card shadow-sm rounded-lg">
-              <div className="card-header d-flex justify-content-between align-items-center">
-                <div className="d-flex align-items-center">
-                 
-                  <h5 className="ml-2 mb-0">Chat with {selectedUserName}</h5> {/* Dynamic Chat Header */}
-                </div>
-                <button className="btn btn-outline-secondary btn-sm">End Chat</button>
-              </div>
-              <div className="card-body p-4">
-                <div className="messages-container" style={{ maxHeight: '400px', overflowY: 'scroll' }}>
-                  {messages.length > 0 ? (
-                    messages.map((msg, index) => (
-                      <div
-                        key={index}
-                        className={`message col-12 mb-3 d-flex justify-content-${msg.sender?.id === user.id ? 'end' : 'start'}`}
-                      >
-                        <div
-                      
-                          className={`p-1  rounded-lg ${msg.sender?.id === user.id ? 'bg-primary text-white' : 'bg-light'}`}
-                          style={{ display: 'flex', alignItems: 'center', maxWidth: '70%',borderRadius:'0.2cm'}}
-                        >
-                          {/* Display sender's avatar */}
-                          <img
-                            src={msg.sender?.image || Image}
-                            alt={msg.sender?.firstname}
-                            className="rounded-circle m-2"
-                            width="40"
-                            height="40"
-                          />
-                          <div>
-                            <p className="mb-0">{msg.message}</p>
-                            <small className="text-muted">{formatTimeAgo(msg.createdAt)}</small>
+        <div className="chat-box">
+        {selectedUser ? (
+                <>
+                    <div className="chat-header">
+                        <div className="chat-header-user">
+                            <img 
+                                src={validateImageUrl(selectedUser.image, Image)} 
+                                alt={selectedUser.firstname}
+                                className="chat-header-avatar"
+                            />
+                            <div className="chat-header-info">
+                                <h4>{selectedUserName}</h4>
+                                <p className={onlineUsers.has(selectedUser.id) ? 'online' : 'offline'}>
+                                    {onlineUsers.has(selectedUser.id) ? 'Online' : 'Offline'}
+                                </p>
                           </div>
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <p>No messages yet.</p>
-                  )}
-                </div>
 
-                <div className="input-group mt-3">
-                  <textarea
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    className="form-control"
-                    placeholder="Type a message..."
-                    rows="3"
-                    style={{ borderRadius: '10px' }}
-                  />
-                  <div className="input-group-append">
-                    <button
-                      className="btn btn-primary"
-                      onClick={handleMessageSend}
-                      style={{ borderRadius: '6px' }}
-                    >
-                      Send
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+                    <div className="messages">
+                        {replyingTo && (
+                            <div className="reply-banner">
+                                <div className="reply-content">
+                                    <span>Replying to: {replyingTo.message}</span>
+                                    <button onClick={() => setReplyingTo(null)}>×</button>
+                                </div>
+                            </div>
+                        )}
+                        {messages.map((msg, index) => (
+                            <div
+                                key={msg.id || index}
+                                className={`message ${msg.senderId === user.id ? 'sent' : 'received'}`}
+                            >
+                                <div className="message-bubble">
+                                    {msg.replyTo && (
+                                        <div className="replied-message">
+                                            {messages.find(m => m.id === msg.replyTo)?.message}
+                                        </div>
+                                    )}
+                                    <div className="message-content">
+                                        {renderMediaMessage(msg)}
+                                    </div>
+                                    <div className="message-meta">
+                                        <span className="message-time">
+                                            {new Date(msg.createdAt).toLocaleTimeString([], { 
+                                                hour: '2-digit', 
+                                                minute: '2-digit' 
+                                            })}
+                                        </span>
+                                        {renderMessageStatus(msg)}
+                                    </div>
+                                </div>
+                                {msg.senderId === user.id && (
+                                    <div className="message-actions">
+                                        <button 
+                                            className="message-menu-button"
+                                            onClick={() => setShowMessageMenu(showMessageMenu === msg.id ? null : msg.id)}
+                                        >
+                                            ⋮
+                                        </button>
+                                        {showMessageMenu === msg.id && (
+                                            <div className="message-menu">
+                                                <button onClick={() => {
+                                                    handleReply(msg);
+                                                    setShowMessageMenu(null);
+                                                }}>
+                                                    Reply
+                                                </button>
+                                                <button onClick={() => {
+                                                    handleDeleteClick(msg.id);
+                                                    setShowMessageMenu(null);
+                                                }}>
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        {typing && (
+                            <div className="typing-indicator">
+                                <span>typing...</span>
+                            </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    <div className="message-input-container">
+                        <div className="input-actions">
+                            <label className="media-upload-button">
+                                <input
+                                    type="file"
+                                    onChange={handleFileSelect}
+                                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+                                    style={{ display: 'none' }}
+                                />
+                                <FaPaperclip />
+                            </label>
+                        </div>
+                        <input
+                            type="text"
+                            className="message-input"
+                            value={messageInput}
+                            onChange={(e) => setMessageInput(e.target.value)}
+                            onKeyPress={handleKeyPress}
+                            placeholder="Type a message..."
+                        />
+                        {selectedFile && (
+                            <div className="selected-file">
+                                <span>{selectedFile.name}</span>
+                                <button onClick={() => setSelectedFile(null)}>×</button>
+                            </div>
+                        )}
+                        <button
+                            className="send-button"
+                            onClick={selectedFile ? handleMediaUpload : handleMessageSend}
+                            disabled={!messageInput.trim() && !selectedFile}
+                        >
+                            Send
+                        </button>
+                    </div>
+                </>
+            ) : (
+                <div className="no-chat-selected">
+                    <img 
+                        src={Image} 
+                        alt="Welcome" 
+                        className="welcome-image"
+                    />
+                    <h2>Welcome to FloraLink Chat</h2>
+                    <p>Select a chat to start messaging</p>
           </div>
-          </> )}
+        )}
       </div>
     </div>
   );

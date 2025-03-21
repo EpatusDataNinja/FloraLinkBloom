@@ -15,7 +15,8 @@ import {
   userProduct,
   getAllUsersWithProductStats,
   getPendingProductsController,
-  getApprovedProducts
+  getApprovedProducts,
+  searchProductsController
 } from "../controllers/ProductController.js";
 import { protect,optionalProtect } from "../middlewares/protect.js";
 
@@ -100,6 +101,7 @@ router.get("/one/:id", protect, getOneProductsController);
 router.get("/user/:id", userProduct);
 router.get("/pending", protect, getPendingProductsController);
 router.get("/approved", optionalProtect, getApprovedProducts);
+router.get("/search", searchProductsController);
 router.post("/add", protect, 
   (req, res, next) => {
     console.log('Add request received');

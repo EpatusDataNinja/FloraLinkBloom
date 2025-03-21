@@ -35,11 +35,22 @@ export const getNotificationsController = async (req, res) => {
 export const createNotificationController = async (req, res) => {
   try {
     const { userID, message, type } = req.body;
-    const notification = await createNotification({ userID, message, type, isRead: false });
+    const notification = await createNotification(
+      { userID, message, type, isRead: false },
+      req.app.get('io') // Get Socket.IO instance from Express app
+    );
 
-    return res.status(201).json({ success: true, message: "Notification created", data: notification });
+    return res.status(201).json({ 
+      success: true, 
+      message: "Notification created", 
+      data: notification 
+    });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Server error", error: error.message });
+    return res.status(500).json({ 
+      success: false, 
+      message: "Server error", 
+      error: error.message 
+    });
   }
 };
 

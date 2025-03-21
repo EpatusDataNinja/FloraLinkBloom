@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import Header from "../../components_part/header";
 import Sidebar from "../../components_part/DashboardSidebar";
-import ModelateProduct from "./ListOfOutProduct";
+import ListOfOutProduct from "./ListOfOutProduct";
 
 const Dashboard = () => {
   const [show, setShow] = useState(false);
@@ -14,7 +14,7 @@ const Dashboard = () => {
         <Sidebar show={show} setShow={setShow} />
         <div className="dashboard-main">
           <div className="dashboard-content">
-            <ModelateProduct />
+            <ListOfOutProduct />
           </div>
         </div>
       </div>

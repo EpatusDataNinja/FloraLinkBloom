@@ -232,30 +232,35 @@ const Notifications = () => {
                   className={`d-flex align-items-start p-3 ${
                     !notification.isRead ? 'bg-light' : ''
                   }`}
-                  action
-                  onClick={() => handleNotificationClick(notification)}
                 >
-                  <div className="me-3">
-                    <NotificationIcon type={notification.type} />
-                  </div>
-                  <div className="flex-grow-1">
-                    <div className="d-flex justify-content-between">
-                      <h6 className="mb-1">
-                        {notification.title}
-                        <NotificationBadge type={notification.type} />
-                      </h6>
-                      <small className="text-muted">
-                        {formatDistanceToNow(new Date(notification.createdAt), {
-                          addSuffix: true,
-                        })}
-                      </small>
+                  <div 
+                    className="d-flex flex-grow-1 align-items-start"
+                    role="button"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleNotificationClick(notification)}
+                  >
+                    <div className="me-3">
+                      <NotificationIcon type={notification.type} />
                     </div>
-                    <p className="mb-1">{notification.message}</p>
-                    {!notification.isRead && (
-                      <Badge bg="info" pill>
-                        New
-                      </Badge>
-                    )}
+                    <div className="flex-grow-1">
+                      <div className="d-flex justify-content-between">
+                        <h6 className="mb-1">
+                          {notification.title}
+                          <NotificationBadge type={notification.type} />
+                        </h6>
+                        <small className="text-muted">
+                          {formatDistanceToNow(new Date(notification.createdAt), {
+                            addSuffix: true,
+                          })}
+                        </small>
+                      </div>
+                      <p className="mb-1">{notification.message}</p>
+                      {!notification.isRead && (
+                        <Badge bg="info" pill>
+                          New
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   <Button
                     variant="link"

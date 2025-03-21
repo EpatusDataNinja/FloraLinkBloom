@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Button, Card, Col, Row, Container, Pagination, Spinner } from "react-bootstrap";
 import axios from "axios";
 import { ToastContainer, toast } from 'react-toastify';
-import { FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
 import Title from "../../components_part/TitleCard";
+import ProductModerationList from "../../components_part/ProductModerationList";
 
 const ListOfOutProduct = () => {
   const [products, setProducts] = useState([]);
@@ -44,33 +43,51 @@ const ListOfOutProduct = () => {
         return;
       }
 
+      // Add debug logging
+      console.log('Attempting to approve product:', productId);
+
       const response = await axios.put(
         `${process.env.REACT_APP_BASE_URL}/api/v1/product/activate/${productId}`,
-        {},
+        {}, // empty body
         {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
         }
       );
 
+      console.log('Server response:', response.data);
+
       if (response.data.success) {
-        // Send notification to seller about product approval
-        try {
-          await axios.post(
-            `${process.env.REACT_APP_BASE_URL}/api/v1/notification/create`,
-            {
-              userID: response.data.data.sellerID, // Assuming the response includes seller ID
-              title: "Product Approved",
-              message: `Your product "${response.data.data.name}" has been approved and is now live.`,
-              type: "PRODUCT_APPROVED",
-              relatedId: productId
-            },
-            {
-              headers: { Authorization: `Bearer ${token}` }
-            }
-          );
-        } catch (notifError) {
-          console.error("Notification error:", notifError);
-          // Don't block the approval process if notification fails
+        // Check if we have the necessary data for notification
+        if (response.data.data && response.data.data.userID) {
+          try {
+            await axios.post(
+              `${process.env.REACT_APP_BASE_URL}/api/v1/notification/create`,
+              {
+                userID: response.data.data.userID, // Changed from sellerID to userID
+                title: "Product Approved",
+                message: `Your product "${response.data.data.name}" has been approved and is now live.`,
+                type: "PRODUCT_APPROVED",
+                relatedId: productId
+              },
+              {
+                headers: { Authorization: `Bearer ${token}` }
+              }
+            );
+          } catch (notifError) {
+            console.error("Notification error:", notifError);
+            // Log more details about the notification error
+            console.error("Notification error details:", {
+              message: notifError.message,
+              response: notifError.response?.data,
+              status: notifError.response?.status
+            });
+            // Continue even if notification fails
+          }
+        } else {
+          console.warn("Missing user data for notification:", response.data);
         }
 
         toast.success("Product approved successfully!");
@@ -79,8 +96,19 @@ const ListOfOutProduct = () => {
         throw new Error(response.data.message || "Failed to approve product");
       }
     } catch (error) {
-      console.error("Error approving product:", error);
-      toast.error(error.response?.data?.message || "Error approving product");
+      // Enhanced error logging
+      console.error("Error approving product:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        stack: error.stack
+      });
+
+      toast.error(
+        error.response?.data?.message || 
+        error.message || 
+        "Error approving product. Please try again."
+      );
     }
   };
 
@@ -136,100 +164,25 @@ const ListOfOutProduct = () => {
     fetchProducts();
   }, []);
 
-  // Pagination Logic
   const indexOfLastProduct = currentPage * productsPerPage;
   const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
   const currentProducts = products.slice(indexOfFirstProduct, indexOfLastProduct);
-  const totalPages = Math.ceil(products.length / productsPerPage);
-
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
 
   return (
-    <Container>
-      <Title title={'Products Pending Approval'}/>
-
-      {loading ? (
-        <div className="text-center">
-          <Spinner animation="border" />
-        </div>
-      ) : (
-        <>
-          <Row>
-            {currentProducts.length > 0 ? (
-              currentProducts.map((product) => (
-                <Col md={4} key={product.id}>
-                  <Card className="mb-4 shadow-lg">
-                    <Card.Img 
-                      variant="top" 
-                      src={product.image.startsWith('http') ? product.image : `${process.env.REACT_APP_BASE_URL}${product.image}`}
-                      onError={(e) => {
-                        e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
-                      }}
-                      alt={product.name}
-                      style={{ height: "200px", objectFit: "cover" }}
-                    />
-                    <Card.Body>
-                      <Card.Title>{product.name}</Card.Title>
-                      <Card.Text>{product.description}</Card.Text>
-                      <Card.Text>Price: ${product.price}</Card.Text>
-                      <Card.Text>Stock: {product.quantity}</Card.Text>
-                      <Card.Text>
-                        Status: <strong className={
-                          product.status === "Pending Approval" ? "text-warning" :
-                          product.status === "rejected" ? "text-danger" :
-                          "text-secondary"
-                        }>{product.status}</strong>
-                      </Card.Text>
-                      <div className="d-flex justify-content-between">
-                        <Button 
-                          variant="success" 
-                          className="me-2"
-                          onClick={() => handleApprove(product.id)}
-                          disabled={product.status === "rejected"}
-                        >
-                          <FaCheckCircle className="me-2" />
-                          Approve
-                        </Button>
-                        <Button 
-                          variant="danger"
-                          onClick={() => handleReject(product.id)}
-                          disabled={product.status === "rejected"}
-                        >
-                          <FaTimesCircle className="me-2" />
-                          Reject
-                        </Button>
-                      </div>
-                    </Card.Body>
-                  </Card>
-                </Col>
-              ))
-            ) : (
-              <div className="text-center">
-                <p>No products pending approval.</p>
-              </div>
-            )}
-          </Row>
-
-          {totalPages > 1 && (
-            <Pagination className="justify-content-center">
-              {Array.from({ length: totalPages }, (_, index) => (
-                <Pagination.Item 
-                  key={index + 1} 
-                  active={index + 1 === currentPage} 
-                  onClick={() => handlePageChange(index + 1)}
-                >
-                  {index + 1}
-                </Pagination.Item>
-              ))}
-            </Pagination>
-          )}
-        </>
-      )}
-
+    <div className="out-of-stock-products">
+      <Title title="Out of Stock Products" />
       <ToastContainer />
-    </Container>
+      <ProductModerationList
+        products={products}
+        currentProducts={currentProducts}
+        loading={loading}
+        currentPage={currentPage}
+        productsPerPage={productsPerPage}
+        handleApprove={handleApprove}
+        handleReject={handleReject}
+        handlePageChange={setCurrentPage}
+      />
+    </div>
   );
 };
 

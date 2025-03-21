@@ -30,8 +30,8 @@ import BuyerDashboardPage from "./pages/BuyerDashboard/BuyerDashboardPage";
 import Users from "./pages/AdminDashboard/UsersPage";
 import UserProductsAdmin from './pages/AdminDashboard/UserProduct';
 import Profile from './pages/AdminDashboard/profile_page';
-import AddProduct from './pages/SellerDashboard/AddProductPage';
-import ModelateProduct from './pages/AdminDashboard/modelete_Product';
+import AddProductPage from './pages/SellerDashboard/AddProductPage';
+import ModerateProduct from './pages/AdminDashboard/ModerateProduct';
 import GeneralProductList from './pages/SellerDashboard/Product_List_page';
 import ProductToBuy from './pages/BuyerDashboard/ProductPage';
 import PaymentPage from './pages/BuyerDashboard/PaymentPage';
@@ -43,7 +43,6 @@ import AdminOrders from './pages/AdminDashboard/AdminOrdersPage';
 import Chat from './pages/BuyerDashboard/ChatPage';
 import SalesReportPage from './pages/SellerDashboard/SalesReportPage';
 import ProductCategories from './pages/SellerDashboard/ProductCategoryPage';
-import PendingProducts from './pages/AdminDashboard/PendingProducts';
 
 // Import profile and settings pages for each role
 import SellerProfile from "./pages/SellerDashboard/user-profile";
@@ -71,6 +70,9 @@ import {
   SalesReport,
   StockPerishabilityReport
 } from './pages/AdminDashboard/Reports';
+
+// Add this import
+import SearchResults from './components/SearchResults';
 
 // Main App component
 function App() {
@@ -126,7 +128,7 @@ function App() {
             <ProductForm />
           </SellerDashboardPage>
         } />
-        <Route path="/admin/moderate_product" element={<ModelateProduct/>} />
+        <Route path="/admin/products-moderation" element={<ModerateProduct/>} />
         <Route path="/product_list" element={
           <SellerDashboardPage>
             <ProductList />
@@ -161,17 +163,12 @@ function App() {
             <SalesReportPage />
           </SellerDashboardPage>
         } />
-        <Route path="/dashboard/seller/add-product" element={
-          <SellerDashboardPage>
-            <ProductForm />
-          </SellerDashboardPage>
-        } />
+        <Route path="/dashboard/seller/add-product" element={<AddProductPage />} />
         <Route path="/dashboard/seller/products" element={
           <SellerDashboardPage>
             <ProductList />
           </SellerDashboardPage>
         } />
-        <Route path="/admin/pending_products" element={<PendingProducts />} />
 
         {/* Profile and Settings Routes */}
         <Route path="/seller-dashboard/user-profile" element={<SellerProfile />} />
@@ -184,8 +181,6 @@ function App() {
         {/* Admin Routes */}
         <Route path="/admin/overview" element={<AdminDashboard_Page />} />
         <Route path="/admin/orders" element={<AdminOrders />} />
-        <Route path="/admin/pending_products" element={<PendingProducts />} />
-        <Route path="/admin/moderate_product" element={<ModelateProduct />} />
 
         {/* Reports Routes */}
         <Route 
@@ -236,6 +231,10 @@ function App() {
             </ErrorBoundary>
           } 
         />
+
+        {/* Search Route */}
+        <Route path="/search" element={<SearchResults />} />
+        <Route path="/product/:id" element={<ProductToBuy />} />
       </Routes>
     </BrowserRouter>
   );

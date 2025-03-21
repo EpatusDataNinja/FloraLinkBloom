@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import axios from "axios";
-import { Table, Input, Button, Pagination } from "antd";
+import { Table, Input, Button, Pagination, Spin } from "antd";
 import { Row, Col } from "react-bootstrap";
 import Title from "../../components_part/TitleCard";
+import { ToastContainer } from 'react-toastify';
 
 const API_URL = `${process.env.REACT_APP_BASE_URL}/api/v1/categories`;
-const TOKEN = localStorage.getItem("token");
 
 const Categories = () => {
   const [categories, setCategories] = useState([]);
@@ -16,56 +16,95 @@ const Categories = () => {
   const [editId, setEditId] = useState(null);
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
   const pageSize = 5;
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     setLoading(true);
     try {
+      const token = localStorage.getItem("token");
       const res = await axios.get(API_URL, {
-        headers: { Authorization: `Bearer ${TOKEN}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       setCategories(res.data.data);
     } catch (error) {
-      toast.error("Error fetching categories");
+      toast.error("Error fetching categories: " + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
 
   const handleAddOrEdit = async () => {
-    if (!name) return toast.error("Category name is required");
+    if (!name.trim()) {
+      toast.error("Category name is required");
+      return;
+    }
+
+    setSubmitting(true);
     try {
+      const token = localStorage.getItem("token");
       if (editId) {
-        await axios.put(`${API_URL}/${editId}`, { name }, {
-          headers: { Authorization: `Bearer ${TOKEN}` },
-        });
-        toast.success("Category updated successfully");
+        const response = await axios.put(
+          `${API_URL}/${editId}`,
+          { name },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        if (response.data.success) {
+          toast.success("Category updated successfully!");
+          setName("");
+          setEditId(null);
+          await fetchCategories();
+        }
       } else {
-        await axios.post(`${API_URL}/add`, { name }, {
-          headers: { Authorization: `Bearer ${TOKEN}` },
-        });
-        toast.success("Category added successfully");
+        const response = await axios.post(
+          `${API_URL}/add`,
+          { name },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        if (response.data.success) {
+          toast.success("Category added successfully!");
+          setName("");
+          await fetchCategories();
+        }
       }
-      setName("");
-      setEditId(null);
-      fetchCategories();
     } catch (error) {
-      toast.error("Failed to add/update category");
+      const errorMessage = error.response?.data?.message || 
+                          "Failed to add/update category";
+      toast.error(errorMessage);
+      
+      // Specific handling for duplicate category
+      if (error.response?.data?.message?.includes("already exists")) {
+        toast.warning("This category already exists!");
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this category?")) {
+      return;
+    }
+
     try {
+      const token = localStorage.getItem("token");
       await axios.delete(`${API_URL}/delete/${id}`, {
-        headers: { Authorization: `Bearer ${TOKEN}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       toast.success("Category deleted successfully");
-      fetchCategories();
+      await fetchCategories(); // Refresh the list
     } catch (error) {
-      toast.error("Error deleting category");
+      toast.error(error.response?.data?.message || "Error deleting category");
     }
   };
 
@@ -80,6 +119,17 @@ const Categories = () => {
 
   return (
     <div className="content-wrapper">
+      <ToastContainer 
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
       <Title title="Product Categories" />
       <Row className="g-4 mb-4">
         <Col xs={12}>
@@ -91,8 +141,14 @@ const Categories = () => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="category-input"
+                  onPressEnter={handleAddOrEdit}
+                  disabled={submitting}
                 />
-                <Button type="primary" onClick={handleAddOrEdit}>
+                <Button 
+                  type="primary" 
+                  onClick={handleAddOrEdit}
+                  loading={submitting}
+                >
                   {editId ? "Update" : "Add"} Category
                 </Button>
               </div>
@@ -106,30 +162,41 @@ const Categories = () => {
             </div>
 
             <div className="table-container">
-              <Table
-                loading={loading}
-                dataSource={paginatedCategories}
-                rowKey="id"
-                columns={[
-                  { title: "ID", dataIndex: "id", key: "id" },
-                  { title: "Name", dataIndex: "name", key: "name" },
-                  {
-                    title: "Actions",
-                    key: "actions",
-                    render: (_, record) => (
-                      <div className="action-buttons">
-                        <Button onClick={() => { setName(record.name); setEditId(record.id); }}>
-                          Edit
-                        </Button>
-                        <Button danger onClick={() => handleDelete(record.id)}>
-                          Delete
-                        </Button>
-                      </div>
-                    ),
-                  },
-                ]}
-                pagination={false}
-              />
+              <Spin spinning={loading}>
+                <Table
+                  dataSource={paginatedCategories}
+                  rowKey="id"
+                  columns={[
+                    { title: "ID", dataIndex: "id", key: "id" },
+                    { title: "Name", dataIndex: "name", key: "name" },
+                    {
+                      title: "Actions",
+                      key: "actions",
+                      render: (_, record) => (
+                        <div className="action-buttons">
+                          <Button 
+                            onClick={() => { 
+                              setName(record.name); 
+                              setEditId(record.id); 
+                            }}
+                            disabled={submitting}
+                          >
+                            Edit
+                          </Button>
+                          <Button 
+                            danger 
+                            onClick={() => handleDelete(record.id)}
+                            disabled={submitting}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      ),
+                    },
+                  ]}
+                  pagination={false}
+                />
+              </Spin>
             </div>
 
             <div className="pagination-wrapper">

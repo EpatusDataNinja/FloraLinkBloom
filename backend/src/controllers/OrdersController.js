@@ -374,7 +374,10 @@ const checkoutOrder = async (req, res) => {
 
     // Send email notification to buyer
     console.log("Sending email to buyer:", buyer.email);
-    await new Email(buyer, { message: `Your order status has been changed to completed!` }).sendNotification();
+    await new Email(buyer, { 
+      message: `Your order status has been changed to completed!`,
+      title: "Order Completed"
+    }).sendNotification();
 
 
         // Send notification
@@ -388,7 +391,10 @@ const checkoutOrder = async (req, res) => {
     
         // Send email notification to buyer
         console.log("Sending email to seller:", seller.email);
-        await new Email(seller, { message: `your order has been re-founded successfully, total amount of ${refundAmount} Rwf and we cut 10% as recharge ! !.` }).sendNotification();
+        await new Email(seller, { 
+          message: `Your order has been refunded successfully, total amount of ${refundAmount} Rwf and we cut 10% as recharge!`,
+          title: "Payment Refund"
+        }).sendNotification();
     
 
 
@@ -549,7 +555,10 @@ const changeOrderStatus = async (req, res) => {
 
     // Send email notification to buyer
     console.log("Sending email to buyer:", buyer.email);
-    await new Email(buyer, { message: `Your order status has been changed to ${req.body.status}!` }).sendNotification();
+    await new Email(buyer, { 
+      message: `Your order status has been changed to ${req.body.status}!`,
+      title: "Order Status Update"
+    }).sendNotification();
 
     if (req.body.status === 'delivered') {
       const admins = await Users.findAll({ where: { role: "admin" } });

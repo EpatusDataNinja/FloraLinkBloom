@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast, ToastContainer } from 'react-toastify';
-import { Form, Button, Card, Row, Col, Spinner } from 'react-bootstrap';
+import { Form, Button, Row, Col, Spinner } from 'react-bootstrap';
 import 'react-toastify/dist/ReactToastify.css';
 import Title from "../../components_part/TitleCard";
 import axios from 'axios';
 
 const ProductForm = ({ editMode, productData }) => {
+  // Add debug logging for props
+  console.log('ProductForm mounted with:', { editMode, productData });
+
   const [product, setProduct] = useState({
     name: "",
     categoryID: "",
@@ -19,23 +22,33 @@ const ProductForm = ({ editMode, productData }) => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
 
+  // Separate useEffect for initial data population
   useEffect(() => {
-    if (editMode && productData) {
+    let mounted = true;
+
+    if (editMode && productData && mounted) {
+      console.log('Setting initial product data:', productData);
+      
       setProduct({
         name: productData.name || "",
         categoryID: productData.category?.id || productData.categoryID || "",
         description: productData.description || "",
-        price: String(productData.price || ""), // Convert to string
-        quantity: String(productData.quantity || ""), // Convert to string
+        price: String(productData.price || ""),
+        quantity: String(productData.quantity || ""),
         image: null,
         currentImage: productData.image || null,
       });
     }
-  }, [editMode, productData]);
+
+    return () => {
+      mounted = false;
+    };
+  }, [editMode, productData]); // Remove product from dependencies
 
   useEffect(() => {
+    let mounted = true;
+
     const fetchCategories = async () => {
       try {
         const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/categories/`, {
@@ -46,6 +59,8 @@ const ProductForm = ({ editMode, productData }) => {
           },
         });
 
+        if (!mounted) return;
+
         if (response.ok) {
           const data = await response.json();
           setCategories(data.data);
@@ -53,11 +68,17 @@ const ProductForm = ({ editMode, productData }) => {
           toast.error("Failed to fetch categories");
         }
       } catch (error) {
-        toast.error("Error fetching categories");
+        if (mounted) {
+          toast.error("Error fetching categories");
+        }
       }
     };
 
     fetchCategories();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const handleInputChange = (e) => {
@@ -88,87 +109,80 @@ const ProductForm = ({ editMode, productData }) => {
     const formData = new FormData();
     
     try {
-      // Basic fields
-      formData.append("name", product.name.trim());
-      formData.append("categoryID", String(product.categoryID));
-      formData.append("description", product.description.trim());
-      formData.append("price", String(product.price));
-      formData.append("quantity", String(product.quantity));
-      
-      // Set initial status for new products
-      if (!editMode) {
-        formData.append("status", "Pending Approval");
-      }
-
-      // Handle image
-      if (product.image instanceof File) {
-        formData.append("image", product.image);
-        console.log('Appending new image file:', product.image.name);
-      } else if (editMode && product.currentImage) {
-        formData.append("existingImage", product.currentImage);
-        console.log('Using existing image:', product.currentImage);
-      }
-
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("Authentication token not found");
-
-      const endpoint = editMode 
-        ? `${process.env.REACT_APP_BASE_URL}/api/v1/product/update/${productData.id}`
-        : `${process.env.REACT_APP_BASE_URL}/api/v1/product/add`;
-
-      // Debug logging
-      console.log('Submitting form to:', endpoint);
-      console.log('Form data contents:');
-      for (let [key, value] of formData.entries()) {
-        console.log(`${key}: ${value instanceof File ? `File (${value.name})` : value}`);
-      }
-
-      const response = await fetch(endpoint, {
-        method: editMode ? "PUT" : "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || data.error || "Failed to process request");
-      }
-
-      // If this is a new product, notify admins
-      if (!editMode) {
-        try {
-          await axios.post(
-            `${process.env.REACT_APP_BASE_URL}/api/v1/notification/create`,
-            {
-              title: 'New Product Approval Required',
-              message: `A new product "${product.name}" requires approval.`,
-              type: 'NEW_PRODUCT',
-              relatedId: data.data.id
-            },
-            {
-              headers: { Authorization: `Bearer ${token}` }
-            }
-          );
-        } catch (notificationError) {
-          console.error('Failed to send notification:', notificationError);
-          // Don't throw here - we don't want to prevent product creation
+        // Get user info from localStorage
+        const userInfo = JSON.parse(localStorage.getItem('user'));
+        if (!userInfo || !userInfo.id) {
+            throw new Error("User information not found");
         }
-      }
 
-      toast.success(editMode ? "Product updated successfully!" : "Product added successfully!");
-      
-      setTimeout(() => {
-        navigate("/dashboard/seller/products");
-      }, 2000);
+        // Basic fields with type conversion
+        formData.append("name", product.name.trim());
+        formData.append("categoryID", Number(product.categoryID));
+        formData.append("description", product.description.trim());
+        formData.append("price", Number(product.price));
+        formData.append("quantity", Number(product.quantity));
+        formData.append("status", "Pending Approval");
+        formData.append("userID", userInfo.id);
+
+        // Image handling with validation
+        if (product.image instanceof File) {
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            if (product.image.size > maxSize) {
+                throw new Error("Image size must be less than 5MB");
+            }
+            formData.append("image", product.image);
+        }
+
+        const token = localStorage.getItem("token");
+        if (!token) throw new Error("Authentication token not found");
+
+        // Use axios with proper configuration
+        const response = await axios({
+            method: 'post',
+            url: `${process.env.REACT_APP_BASE_URL}/api/v1/product/add`,
+            data: formData,
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'multipart/form-data',
+                'Accept': 'application/json'
+            }
+        });
+
+        console.log('Server response:', response.data);
+
+        if (response.data.success) {
+            toast.success("Product added successfully!");
+            // Show warning if email notifications failed
+            if (response.data.emailError) {
+                toast.warning("Product added but email notifications may be delayed");
+            }
+            setTimeout(() => {
+                navigate("/dashboard/seller/products");
+            }, 2000);
+        } else {
+            throw new Error(response.data.message || "Failed to add product");
+        }
 
     } catch (error) {
-      console.error("Error details:", error);
-      toast.error(error.message || "Failed to process request");
+        console.error("Error details:", {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+        });
+
+        // More specific error handling
+        if (error.response?.data?.error?.includes('Invalid login')) {
+            // Email service error - product still added
+            toast.success("Product added successfully!");
+            toast.warning("Email notifications may be delayed");
+            setTimeout(() => {
+                navigate("/dashboard/seller/products");
+            }, 2000);
+        } else {
+            toast.error(error.response?.data?.message || "Failed to add product");
+        }
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   };
 
@@ -177,39 +191,68 @@ const ProductForm = ({ editMode, productData }) => {
       return;
     }
 
+    setLoading(true);
     try {
       const token = localStorage.getItem("token");
       if (!token) {
         throw new Error("Authentication token not found");
       }
 
+      // Add debug logging
+      console.log('Deleting product:', productData.id);
+
       const response = await fetch(
         `${process.env.REACT_APP_BASE_URL}/api/v1/product/delete/${productData.id}`,
         {
-          method: "DELETE",
+          method: 'DELETE',
           headers: {
-            "Authorization": `Bearer ${token}`
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
           }
         }
       );
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || "Failed to delete product");
+        throw new Error(data.message || 'Failed to delete product');
+      }
+
+      // Send notification about product deletion
+      try {
+        await fetch(
+          `${process.env.REACT_APP_BASE_URL}/api/v1/notification/create`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+              title: `Product Deleted by Seller`,
+              message: `Product "${productData.name}" has been deleted.`,
+              type: "PRODUCT_DELETED",
+              relatedId: productData.id
+            })
+          }
+        );
+      } catch (notifError) {
+        console.warn('Notification creation failed, but product was deleted successfully:', notifError);
       }
 
       toast.success("Product deleted successfully!");
       
-      // Use the stored return URL or fall back to a default
-      const returnUrl = location.state?.returnUrl || "/dashboard/seller/products";
-      
+      // Navigate after a short delay
       setTimeout(() => {
-        navigate(returnUrl);
+        navigate("/dashboard/seller/products");
       }, 2000);
 
     } catch (error) {
-      console.error("Error deleting product:", error);
-      toast.error(error.message || "Error deleting product");
+      console.error("Delete error details:", error);
+      toast.error(error.message || "Failed to delete product");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -249,7 +292,7 @@ const ProductForm = ({ editMode, productData }) => {
   };
 
   return (
-    <div className="content-wrapper">
+    <>
       <Title title={editMode ? "Edit Product" : "Add New Product"} />
       <div className="content-card">
         <Form onSubmit={handleSubmit} encType="multipart/form-data">
@@ -378,11 +421,6 @@ const ProductForm = ({ editMode, productData }) => {
       <ToastContainer />
 
       <style jsx="true">{`
-        .content-wrapper {
-          padding: 20px;
-          background: #f8f9fa;
-        }
-
         .content-card {
           background: white;
           border-radius: 8px;
@@ -391,16 +429,12 @@ const ProductForm = ({ editMode, productData }) => {
         }
 
         @media (max-width: 768px) {
-          .content-wrapper {
-            padding: 15px;
-          }
-
           .content-card {
             padding: 1rem;
           }
         }
       `}</style>
-    </div>
+    </>
   );
 };
 

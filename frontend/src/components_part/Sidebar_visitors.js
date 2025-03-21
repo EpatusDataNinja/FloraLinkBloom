@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { FaCheckCircle, FaBox, FaChevronRight, FaChevronLeft, FaUser } from 'react-icons/fa';
 import { Card, Badge, Spinner, Modal, Button, Container } from 'react-bootstrap';
 import axios from 'axios';
-import { toast } from 'react-toastify';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
 
 // ProductCarousel Component
@@ -306,83 +307,180 @@ const Sidebar = ({ show, setShow }) => {
     }));
   }, [groupedProducts]);
 
-  const addToGuestCart = (product) => {
+  const addToGuestCart = async (product) => {
+    const isAuthenticated = localStorage.getItem("token");
+    const cartKey = isAuthenticated ? "cart" : "guestCart";
+    
     try {
-      const existingCart = JSON.parse(localStorage.getItem("guestCart") || "[]");
-      
-      if (existingCart.length > 0) {
-        const currentSellerId = existingCart[0].sellerId;
-        const currentSellerName = existingCart[0].sellerName;
+        // First validate product availability with server
+        const response = await axios.get(
+            `${process.env.REACT_APP_BASE_URL}/api/v1/product/approved`
+        );
+        
+        const currentProduct = response.data.data.find(p => p.id === product.id);
+        if (!currentProduct) {
+            toast.error(
+                <div>
+                    <h6>Product Unavailable</h6>
+                    <p>This product is no longer available.</p>
+                </div>,
+                { autoClose: 5000 }
+            );
+            return;
+        }
 
-        if (product.userID !== currentSellerId) {
-          toast.error(
+        if (currentProduct.quantity <= 0) {
+            toast.error(
+                <div>
+                    <h6>Out of Stock</h6>
+                    <p>Sorry, this product is currently out of stock.</p>
+                </div>,
+                { autoClose: 5000 }
+            );
+            return;
+        }
+
+        const existingCart = JSON.parse(localStorage.getItem(cartKey) || "[]");
+        
+        // Check for mixed sellers
+        if (existingCart.length > 0) {
+            const currentSellerId = existingCart[0].sellerId;
+            const currentSellerName = existingCart[0].sellerName;
+
+            if (product.userID !== currentSellerId) {
+                toast.error(
+                    <div>
+                        <h6 className="mb-2">Cannot Mix Sellers in Cart</h6>
+                        <p>Your cart has items from: <strong>{currentSellerName}</strong></p>
+                        <p>Please either:</p>
+                        <ul className="mb-0">
+                            <li>Complete your current cart</li>
+                            <li>Clear your cart to add items from a different seller</li>
+                        </ul>
+                        <div className="mt-3">
+                            <Button
+                                variant="outline-danger"
+                                size="sm"
+                                className="me-2"
+                                onClick={() => {
+                                    localStorage.setItem(cartKey, "[]");
+                                    addToGuestCart(product); // Retry adding after clearing
+                                }}
+                            >
+                                Clear Cart
+                            </Button>
+                            <Button
+                                variant="success"
+                                size="sm"
+                                onClick={() => {
+                                    if (isAuthenticated) {
+                                        navigate('/cart');
+                                    } else {
+                                        setShowModal(false); // Close the current modal if open
+                                        const event = new CustomEvent('openGuestCart');
+                                        window.dispatchEvent(event);
+                                    }
+                                }}
+                            >
+                                View Cart
+                            </Button>
+                        </div>
+                    </div>,
+                    {
+                        autoClose: false,
+                        position: "top-center",
+                        style: { backgroundColor: '#fff3cd', color: '#664d03' }
+                    }
+                );
+                return;
+            }
+        }
+
+        // Check for existing product
+        const existingProduct = existingCart.find(item => item.id === product.id);
+        if (existingProduct) {
+            toast.info(
+                <div>
+                    <h6 className="mb-2">Product Already in Cart</h6>
+                    <p>Current quantity: {existingProduct.quantity}</p>
+                    <p>Maximum available: {currentProduct.quantity}</p>
+                    <Button 
+                        variant="success"
+                        size="sm"
+                        className="w-100"
+                        onClick={() => {
+                            if (isAuthenticated) {
+                                navigate('/cart');
+                            } else {
+                                setShowModal(false); // Close the current modal if open
+                                const event = new CustomEvent('openGuestCart');
+                                window.dispatchEvent(event);
+                            }
+                        }}
+                    >
+                        View Cart
+                    </Button>
+                </div>,
+                {
+                    autoClose: 8000,
+                    position: "top-center",
+                    style: { backgroundColor: '#cff4fc', color: '#055160' }
+                }
+            );
+            return;
+        }
+
+        // Add to cart with updated product data
+        const cartItem = {
+            id: product.id,
+            name: product.name,
+            price: currentProduct.price,
+            image: product.image,
+            quantity: 1,
+            availableQuantity: currentProduct.quantity,
+            sellerId: product.userID,
+            sellerName: product.sellerName
+        };
+
+        localStorage.setItem(cartKey, JSON.stringify([...existingCart, cartItem]));
+        
+        toast.success(
             <div>
-              <h6 className="mb-2">Cannot Mix Sellers in Cart</h6>
-              <p>Your cart already has items from: <strong>{currentSellerName}</strong></p>
-              <p>Please either:</p>
-              <ul className="mb-0">
-                <li>Complete your current cart</li>
-                <li>Clear your cart to add items from a different seller</li>
-              </ul>
+                <h6 className="mb-2">{product.name} added to cart!</h6>
+                <small>Go to cart to adjust quantity if needed.</small>
+                <Button 
+                    variant="success"
+                    size="sm"
+                    className="w-100 mt-2"
+                    onClick={() => {
+                        if (isAuthenticated) {
+                            navigate('/cart');
+                        } else {
+                            setShowModal(false); // Close the current modal if open
+                            const event = new CustomEvent('openGuestCart');
+                            window.dispatchEvent(event);
+                        }
+                    }}
+                >
+                    View Cart
+                </Button>
             </div>,
             {
-              autoClose: 6000,
-              position: "top-center",
-              style: { backgroundColor: '#fff3cd', color: '#664d03' }
+                position: "top-right",
+                autoClose: 3000,
+                style: { backgroundColor: '#d1e7dd', color: '#0f5132' }
             }
-          );
-          return;
-        }
-      }
-
-      const existingProduct = existingCart.find(item => item.id === product.id);
-      if (existingProduct) {
-        toast.info(
-          <div>
-            <h6 className="mb-2">Product Already in Cart</h6>
-            <p>This product is already in your cart.</p>
-            <p>You can adjust the quantity in the cart page.</p>
-            <button 
-              onClick={() => navigate('/cart')} 
-              className="btn btn-sm btn-success mt-2"
-            >
-              Go to Cart
-            </button>
-          </div>,
-          {
-            autoClose: 5000,
-            position: "top-center",
-            style: { backgroundColor: '#cff4fc', color: '#055160' }
-          }
         );
-        return;
-      }
 
-      const cartItem = {
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        image: product.image,
-        quantity: 1,
-        availableQuantity: product.quantity,
-        sellerId: product.userID,
-        sellerName: product.sellerName
-      };
-
-      localStorage.setItem("guestCart", JSON.stringify([...existingCart, cartItem]));
-      toast.success(
-        <div>
-          <p className="mb-1"><strong>{product.name}</strong> added to cart!</p>
-          <small>Go to cart to adjust quantity if needed.</small>
-        </div>,
-        {
-          position: "top-right",
-          autoClose: 3000
-        }
-      );
     } catch (error) {
-      console.error("Error adding to guest cart:", error);
-      toast.error("Failed to add product to cart");
+        console.error("Error adding to cart:", error);
+        toast.error(
+            <div>
+                <h6>Error Adding to Cart</h6>
+                <p>Please try again or contact support if the problem persists.</p>
+            </div>,
+            { autoClose: 5000 }
+        );
     }
   };
 
@@ -398,34 +496,36 @@ const Sidebar = ({ show, setShow }) => {
   };
 
   return (
-    <aside className={`sidebar ${show ? 'show' : ''}`}>
-      <div className="sidebar-header">
-        <h2 className="h5 mb-0">Choose Your Grower/Florist</h2>
-      </div>
-      <div className="sidebar-content">
-        {loading ? (
-          <div className="text-center py-4">
-            <Spinner animation="border" variant="success" />
+    <>
+      <aside className={`sidebar ${show ? 'show' : ''}`}>
+        <div className="sidebar-header">
+          <h2 className="h5 mb-0">Choose Your Grower/Florist</h2>
+        </div>
+        <div className="sidebar-content">
+          {loading ? (
+            <div className="text-center py-4">
+              <Spinner animation="border" variant="success" />
+              </div>
+          ) : Object.entries(groupedProducts).length > 0 ? (
+            Object.entries(groupedProducts).map(([sellerId, sellerData]) => (
+              <div key={sellerId} className="seller-section mb-4">
+                <ProductCarousel
+                  products={sellerData.products}
+                  currentIndex={currentProductIndex[sellerId] || 0}
+                  onNext={() => handleProductNavigation(sellerId, 'next')}
+                  onPrev={() => handleProductNavigation(sellerId, 'prev')}
+                  onViewAll={() => handleViewAll(sellerData)}
+                  seller={sellerData.seller}
+                />
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-4">
+              <p>No products available</p>
             </div>
-        ) : Object.entries(groupedProducts).length > 0 ? (
-          Object.entries(groupedProducts).map(([sellerId, sellerData]) => (
-            <div key={sellerId} className="seller-section mb-4">
-              <ProductCarousel
-                products={sellerData.products}
-                currentIndex={currentProductIndex[sellerId] || 0}
-                onNext={() => handleProductNavigation(sellerId, 'next')}
-                onPrev={() => handleProductNavigation(sellerId, 'prev')}
-                onViewAll={() => handleViewAll(sellerData)}
-                seller={sellerData.seller}
-              />
-            </div>
-          ))
-        ) : (
-          <div className="text-center py-4">
-            <p>No products available</p>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </aside>
 
       {showModal && selectedSeller && (
         <SellerProductsModal
@@ -437,6 +537,19 @@ const Sidebar = ({ show, setShow }) => {
           onAddToCart={addToGuestCart}
         />
       )}
+
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={true}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+      />
 
       <style jsx="true">{`
         .sidebar {
@@ -661,7 +774,7 @@ const Sidebar = ({ show, setShow }) => {
           }
         }
       `}</style>
-    </aside>
+    </>
   );
 };
 

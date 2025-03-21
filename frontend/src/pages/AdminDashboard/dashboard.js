@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Col, Row, Spinner } from 'react-bootstrap';
 import {
-  FaUsers, FaStore, FaShoppingCart, FaDollarSign,
-  FaUserFriends, FaBox, FaChartLine, FaMoneyBillWave
+  FaUsers, FaStore, FaShoppingCart,
+  FaUserFriends, FaChartLine, FaMoneyBillWave
 } from 'react-icons/fa';
 import {
   Chart as ChartJS,

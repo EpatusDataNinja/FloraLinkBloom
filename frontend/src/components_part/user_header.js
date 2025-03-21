@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { FaShoppingCart, FaUser, FaSearch } from 'react-icons/fa';
 import { Badge } from 'react-bootstrap';
 import GuestCartModal from './GuestCartModal';
+import SearchSuggestions from '../components/SearchSuggestions';
+import '../styles/SearchSuggestions.css';
 
 const UserHeader = ({ setShow }) => {
   const [cartCount, setCartCount] = useState(0);
   const [showCart, setShowCart] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const navigate = useNavigate();
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     // Check if user is authenticated
@@ -24,6 +28,13 @@ const UserHeader = ({ setShow }) => {
       }
     };
 
+    // Add event listener for opening guest cart
+    const handleOpenGuestCart = () => {
+      setShowCart(true);
+    };
+
+    window.addEventListener('openGuestCart', handleOpenGuestCart);
+
     // Initial count
     updateCartCount();
 
@@ -35,6 +46,7 @@ const UserHeader = ({ setShow }) => {
 
     return () => {
       window.removeEventListener('storage', updateCartCount);
+      window.removeEventListener('openGuestCart', handleOpenGuestCart);
       clearInterval(interval);
     };
   }, []);
@@ -68,7 +80,8 @@ const UserHeader = ({ setShow }) => {
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)', 
         position: 'sticky', 
         top: 0, 
-        zIndex: 1000 
+        zIndex: 1000,
+        gap: '1rem'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <h1 style={{ fontSize: '1.875rem', fontWeight: 'bold', color: '#15803d', margin: 0 }}>FloraLink</h1>
@@ -84,25 +97,49 @@ const UserHeader = ({ setShow }) => {
           </Link>
         </div>
 
-        <div style={{ position: 'relative', width: '16rem' }}>
-          <input 
-            type="text" 
-            placeholder="Search..." 
-            style={{ 
-              width: '100%', 
-              padding: '0.375rem 2rem 0.375rem 2rem', 
-              border: '1px solid #e5e7eb', 
-              borderRadius: '0.375rem', 
-              fontSize: '0.875rem' 
-            }} 
-          />
-          <FaSearch style={{ 
-            position: 'absolute', 
-            left: '0.5rem', 
-            top: '50%', 
-            transform: 'translateY(-50%)', 
-            color: '#6b7280' 
-          }} />
+        <div style={{ 
+            position: 'relative', 
+            width: '400px',
+            zIndex: 1001,
+            margin: '0 1rem'
+        }}>
+            <form onSubmit={(e) => {
+                e.preventDefault();
+                if (searchTerm.trim()) {
+                    navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
+                    setSearchTerm('');
+                }
+            }} className="search-container">
+                <FaSearch style={{ 
+                    position: 'absolute',
+                    left: '0.75rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#6b7280'
+                }} />
+                <input 
+                    type="text" 
+                    name="search"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search products..." 
+                    style={{ 
+                        width: '100%',
+                        padding: '0.5rem 1rem 0.5rem 2.5rem',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '0.875rem',
+                        transition: 'all 0.3s ease',
+                        outline: 'none'
+                    }}
+                />
+            </form>
+            <div style={{ position: 'relative', width: '100%' }}>
+                <SearchSuggestions 
+                    searchTerm={searchTerm} 
+                    onSelect={() => setSearchTerm('')}
+                />
+            </div>
         </div>
 
         <ul style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', listStyle: 'none', margin: 0, padding: 0 }}>

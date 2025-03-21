@@ -1,11 +1,13 @@
 import { FaBell, FaUser, FaCog, FaSignOutAlt, FaEnvelope, FaShoppingCart, FaSearch } from "react-icons/fa";
 import Badge from "react-bootstrap/Badge";
 import { useNavigate, Link, useLocation } from "react-router-dom";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from './user.png'
 import Title from "../components_part/TitleCard";
 import axios from 'axios';
 import { Spinner } from 'react-bootstrap';
+import io from 'socket.io-client';
+import SearchSuggestions from '../components/SearchSuggestions';
 
 const Header = ({ setShow }) => {
     const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -14,8 +16,14 @@ const Header = ({ setShow }) => {
     const [cartItemsCount, setCartItemsCount] = useState(0);
     const [notifications, setNotifications] = useState([]);
     const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
+    const [unreadMessages, setUnreadMessages] = useState(0);
+    const [showMessagePreview, setShowMessagePreview] = useState(false);
+    const [unreadMessagesList, setUnreadMessagesList] = useState([]);
     const navigate = useNavigate();
     const location = useLocation();
+    const token = localStorage.getItem('token');
+    const [searchTerm, setSearchTerm] = useState('');
+    const searchContainerRef = useRef(null);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -79,6 +87,51 @@ const Header = ({ setShow }) => {
         };
     }, []);
 
+    useEffect(() => {
+        if (!token) return;
+
+        let socket;
+        const initializeSocket = async () => {
+            try {
+                await fetchUnreadMessages();
+
+                socket = io(process.env.REACT_APP_BASE_URL, {
+                    auth: { token }
+                });
+
+                socket.on('messagesRead', () => {
+                    fetchUnreadMessages(); // Refresh unread count
+                });
+
+                socket.on('newMessage', () => {
+                    fetchUnreadMessages();
+                });
+
+            } catch (error) {
+                console.error('Error initializing socket:', error);
+            }
+        };
+
+        initializeSocket();
+        const interval = setInterval(fetchUnreadMessages, 30000);
+
+        return () => {
+            clearInterval(interval);
+            if (socket) socket.disconnect();
+        };
+    }, [token]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
+                setSearchTerm('');
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const getRoleColor = () => {
         switch (user?.role) {
             case 'admin': return '#134e2c';
@@ -117,6 +170,44 @@ const Header = ({ setShow }) => {
         }
     };
 
+    const fetchUnreadMessages = async () => {
+        if (!token) return;
+        
+        try {
+            const response = await fetch(
+                `${process.env.REACT_APP_BASE_URL}/api/v1/message/unread`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            const data = await response.json();
+
+            if (data.success) {
+                setUnreadMessages(data.messages.length);
+                setUnreadMessagesList(data.messages);
+            }
+        } catch (error) {
+            console.error('Error fetching unread messages:', error);
+            setUnreadMessages(0);
+            setUnreadMessagesList([]);
+        }
+    };
+
+    const handleMessageClick = (message) => {
+        setShowMessagePreview(false);
+        navigate('/chat', { 
+            state: { 
+                selectedUserId: message.sender.id,
+                selectedUserName: `${message.sender.firstname} ${message.sender.lastname}`
+            }
+        });
+    };
+
     return (
         <header className="dashboard-header">
             <div className="header-left">
@@ -133,22 +224,100 @@ const Header = ({ setShow }) => {
                 </div>
             </div>
 
-            <div className="header-center">
-                <div className="search-container">
-                    <FaSearch className="search-icon" />
-                    <input 
-                        type="text" 
-                        placeholder={`Search in ${capitalizeRole(user?.role)} Dashboard...`}
-                        className="search-input"
-                    />
+            <div className="header-center" ref={searchContainerRef}>
+                <div style={{ 
+                    position: 'relative', 
+                    width: '400px',
+                    zIndex: 1001,
+                    margin: '0 auto'
+                }}>
+                    <form onSubmit={(e) => {
+                        e.preventDefault();
+                        if (searchTerm.trim()) {
+                            navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
+                            setSearchTerm('');
+                        }
+                    }} className="search-container">
+                        <FaSearch className="search-icon" />
+                        <input 
+                            type="text" 
+                            name="search"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder={`Search in ${capitalizeRole(user?.role)} Dashboard...`}
+                            style={{ 
+                                width: '100%',
+                                padding: '0.5rem 1rem 0.5rem 2.5rem',
+                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                borderRadius: '8px',
+                                fontSize: '0.875rem',
+                                transition: 'all 0.3s ease',
+                                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                                color: 'white'
+                            }}
+                        />
+                    </form>
+                    <div style={{ position: 'relative', width: '100%' }}>
+                        <SearchSuggestions 
+                            searchTerm={searchTerm} 
+                            onSelect={() => setSearchTerm('')}
+                        />
+                    </div>
                 </div>
             </div>
 
             <div className="header-right">
                 <div className="header-actions">
-                    <button className="action-button">
-                        <FaEnvelope />
-                    </button>
+                    <div className="message-dropdown">
+                        <div className="message-trigger" onClick={() => setShowMessagePreview(!showMessagePreview)}>
+                            <FaEnvelope className="message-icon" />
+                            {unreadMessages > 0 && (
+                                <Badge pill bg="danger" className="message-badge">
+                                    {unreadMessages}
+                                </Badge>
+                            )}
+                        </div>
+                        {showMessagePreview && (
+                            <div className="message-preview-dropdown">
+                                <div className="preview-header">
+                                    <h6 className="preview-title">Unread Messages</h6>
+                                </div>
+                                <div className="preview-list">
+                                    {unreadMessagesList.length > 0 ? (
+                                        unreadMessagesList.map((msg) => (
+                                            <div 
+                                                key={msg.id} 
+                                                className="message-preview-item"
+                                                onClick={() => handleMessageClick(msg)}
+                                            >
+                                                <div className="message-sender">
+                                                    {msg.sender.firstname} {msg.sender.lastname}
+                                                </div>
+                                                <div className="message-content">
+                                                    {msg.message}
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="no-messages">
+                                            No new messages
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="preview-footer">
+                                    <button 
+                                        className="view-all-link"
+                                        onClick={() => {
+                                            setShowMessagePreview(false);
+                                            navigate('/chat');
+                                        }}
+                                    >
+                                        View All Messages
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                     
                     <Link to="/notifications" className="action-button notification-button">
                         <FaBell />
@@ -447,6 +616,77 @@ const Header = ({ setShow }) => {
                     .header-actions {
                         gap: 0.5rem;
                     }
+                }
+
+                .message-dropdown {
+                    position: relative;
+                    display: inline-block;
+                }
+
+                .message-trigger {
+                    cursor: pointer;
+                    padding: 8px;
+                    display: flex;
+                    align-items: center;
+                    color: white;
+                }
+
+                .message-icon {
+                    font-size: 1.2rem;
+                }
+
+                .message-preview-dropdown {
+                    position: absolute;
+                    top: calc(100% + 10px);
+                    right: -10px;
+                    width: 300px;
+                    background: white;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    z-index: 1000;
+                }
+
+                .preview-header {
+                    padding: 12px 16px;
+                    border-bottom: 1px solid #e0e0e0;
+                }
+
+                .preview-title {
+                    margin: 0;
+                    color: #333;
+                    font-size: 14px;
+                    font-weight: 600;
+                }
+
+                .preview-list {
+                    max-height: 300px;
+                    overflow-y: auto;
+                    padding: 8px 0;
+                }
+
+                .no-messages {
+                    padding: 16px;
+                    text-align: center;
+                    color: #666;
+                    font-size: 14px;
+                }
+
+                .preview-footer {
+                    padding: 12px 16px;
+                    border-top: 1px solid #e0e0e0;
+                    text-align: center;
+                }
+
+                .view-all-link {
+                    color: #15803d;
+                    text-decoration: none;
+                    font-size: 14px;
+                    font-weight: 500;
+                }
+
+                .view-all-link:hover {
+                    text-decoration: underline;
+                    color: #166534;
                 }
             `}</style>
         </header>

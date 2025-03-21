@@ -31,8 +31,7 @@ const Sidebar = ({ show, setShow }) => {
     { name: "Overview", icon: <FaTachometerAlt />, to: "/admin/overview" },
     { name: "Users Management", icon: <FaUsers />, to: "/dashboard/users" },
     { name: "Orders", icon: <FaShoppingCart />, to: "/admin/orders" },
-    { name: "Pending Products", icon: <FaLeaf />, to: "/admin/pending_products" },
-    { name: "Products Moderation", icon: <FaStore />, to: "/admin/moderate_product" },
+    { name: "Products Moderation", icon: <FaStore />, to: "/admin/products-moderation" },
     { name: "Notifications", icon: <FaBell />, to: "/notifications" },
     { name: "Profile Edit", icon: <FaRegUserCircle />, to: "/profile" },
     { name: "Manage Payments", icon: <FaCreditCard />, to: "/payment" },
@@ -53,7 +52,7 @@ const Sidebar = ({ show, setShow }) => {
   const sellerMenu = [
     { name: "Overview", icon: <FaTachometerAlt />, to: "/seller/overview" },
     { name: "Orders", icon: <FaShoppingCart />, to: "/seller/orders" },
-    { name: "Manage Types", icon: <FaLeaf />, to: "/product/categories" },
+    { name: "Manage Categories", icon: <FaLeaf />, to: "/product/categories" },
     { name: "Post Product", icon: <FaStore />, to: "/add_product" },
     { name: "Products List", icon: <FaBox />, to: "/product_list" },
     { name: "Sales Report", icon: <FaChartLine />, to: "/sales/report" },
@@ -84,6 +83,14 @@ const Sidebar = ({ show, setShow }) => {
     }
   }, [navigate]);
 
+  // Move getMenu outside useEffect to avoid dependency issues
+  const getMenu = React.useCallback(() => {
+    if (obj.role === 'admin') return adminMenu;
+    if (obj.role === 'seller') return sellerMenu;
+    if (obj.role === 'buyer') return buyerMenu;
+    return [];
+  }, [obj.role]); // Add obj.role as dependency
+
   useEffect(() => {
     const currentPath = location.pathname;
     const menu = getMenu();
@@ -91,7 +98,7 @@ const Sidebar = ({ show, setShow }) => {
     if (currentItem) {
       setActiveItem(currentItem.name);
     }
-  }, [location.pathname]);
+  }, [location.pathname, getMenu]); // Add getMenu as dependency
 
   useEffect(() => {
     const fetchNotifications = async () => {
@@ -118,13 +125,6 @@ const Sidebar = ({ show, setShow }) => {
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, []);
-
-  const getMenu = () => {
-    if (obj.role === 'admin') return adminMenu;
-    if (obj.role === 'seller') return sellerMenu;
-    if (obj.role === 'buyer') return buyerMenu;
-    return [];
-  };
 
   const menuItems = getMenu();
 

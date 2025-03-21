@@ -191,9 +191,27 @@ export const getAllProductses = async (userID) => {
 
 export const createProducts = async (ProductsData) => {
   try {
-    return await Products.create(ProductsData);
+    // Log the incoming data
+    console.log('Creating product with data:', ProductsData);
+    
+    // Validate required fields
+    const requiredFields = ['name', 'categoryID', 'description', 'price', 'quantity'];
+    for (const field of requiredFields) {
+      if (!ProductsData[field]) {
+        throw new Error(`Missing required field: ${field}`);
+      }
+    }
+
+    // Create the product
+    const product = await Products.create(ProductsData);
+    
+    // Log the created product
+    console.log('Product created successfully:', product);
+    
+    return product;
   } catch (error) {
-    throw new Error(`Error creating Products: ${error.message}`);
+    console.error('Error in createProducts service:', error);
+    throw new Error(`Failed to create product: ${error.message}`);
   }
 };
 

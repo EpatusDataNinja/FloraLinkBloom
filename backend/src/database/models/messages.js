@@ -19,12 +19,33 @@ module.exports = (sequelize, DataTypes) => {
       senderId: {
         type: DataTypes.INTEGER,
         allowNull: false,
-
       },
       receiverId: {
         type: DataTypes.INTEGER,
         allowNull: false,
       },
+      isRead: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false
+      },
+      mediaType: {
+        type: DataTypes.ENUM('text', 'image', 'video', 'audio', 'document'),
+        defaultValue: 'text',
+        allowNull: false
+      },
+      mediaUrl: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      fileName: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      fileSize: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      }
     },
     {
       sequelize,

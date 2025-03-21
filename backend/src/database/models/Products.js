@@ -41,14 +41,39 @@ module.exports = (sequelize, DataTypes) => {
   }
   Products.init(
     {
-      userID: DataTypes.INTEGER,
-      categoryID: DataTypes.INTEGER,
-      name: DataTypes.STRING,
-      description: DataTypes.STRING,
-      image: DataTypes.STRING,
-      price: DataTypes.DECIMAL,
-      quantity: DataTypes.INTEGER,
-      status: DataTypes.STRING,
+      userID: {
+        type: DataTypes.INTEGER,
+        allowNull: false
+      },
+      categoryID: {
+        type: DataTypes.INTEGER,
+        allowNull: false
+      },
+      name: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      description: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      image: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      price: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false
+      },
+      quantity: {
+        type: DataTypes.INTEGER,
+        allowNull: false
+      },
+      status: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        defaultValue: "Pending Approval"
+      }
     },
     {
       sequelize,

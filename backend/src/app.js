@@ -7,6 +7,7 @@ import path from 'path';
 import router from "./routers/index.js";
 import notificationRouter from "./routers/notificationRouter.js";
 import productRouter from "./routers/ProductRouter.js";
+import messagesRouter from "./routers/messagesRouter.js";
 import './cron/reportUpdates.js';
 import './events/orderEvents.js';
 
@@ -16,7 +17,7 @@ const app = express();
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000', // Replace with your frontend URL
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
@@ -40,14 +41,32 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use("/api/v1", router);
 app.use("/api/v1/notification", notificationRouter);
 app.use("/api/v1/product", productRouter);
+app.use("/api/v1/message", messagesRouter);
 
-// Error handling middleware
+// Add this before your error handling middleware
+app.use((req, res, next) => {
+  const oldSend = res.send;
+  res.send = function (data) {
+    console.log(`Response for ${req.method} ${req.url}:`, data);
+    oldSend.apply(res, arguments);
+  };
+  next();
+});
+
+// Update your error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Error occurred:', {
+    method: req.method,
+    url: req.url,
+    error: err.stack
+  });
+  
   res.status(500).json({
     success: false,
-    message: err.message || 'Something went wrong!'
+    message: err.message || 'Something went wrong!',
+    error: process.env.NODE_ENV === 'development' ? err.stack : undefined
   });
 });
 
+// Export the Express app
 export default app;

@@ -119,7 +119,10 @@ export const Signup = async (req, res) => {
   });
 
   // Send email notification to the user
-  await new Email(newUser, { message: "Your account is pending approval. You will be notified once reviewed." }).sendNotification();
+  await new Email(newUser, { 
+    message: "Your account is pending approval. You will be notified once reviewed.",
+    title: "Account Registration"
+  }).sendNotification();
 
   // Find all admins
   const admins = await Users.findAll({ where: { role: "admin" } });
@@ -134,7 +137,10 @@ export const Signup = async (req, res) => {
     });
 
     // Send email notification to each admin
-    await new Email(admin, { message: `A new user ${req.body.role} called has been registered in system ${req.body.firstname} ${req.body.lastname}) needs to be checked and approval or reject !.` }).sendNotification();
+    await new Email(admin, { 
+      message: `A new user ${req.body.role} called ${req.body.firstname} ${req.body.lastname} has been registered in system and needs to be checked and approved or rejected!`,
+      title: "New User Registration"
+    }).sendNotification();
   }
 
     return res.status(201).json({
@@ -298,7 +304,10 @@ export const addUser = async (req, res) => {
     newUser.password = password;
 
     // send email
-    await new Email(newUser).sendAccountAdded();
+    await new Email(newUser, {
+      title: "Welcome to FloraLink",
+      message: "Your account has been created successfully."
+    }).sendAccountAdded();
 
     const notification = await createNotification({ userID:newUser.id,title:"Account created for you", message:"your account has been created successfull", type:'account', isRead: false });
     
@@ -510,7 +519,10 @@ export const deleteOneUser = async (req, res) => {
     });
 
     // Send email notification
-    await new Email(existingUser, { message: "Your account has been deleted." }).sendNotification();
+    await new Email(existingUser, { 
+      message: "Your account has been deleted.",
+      title: "Account Deleted"
+    }).sendNotification();
 
     return res.status(200).json({ success: true, message: "User deleted successfully" });
   } catch (error) {
@@ -536,7 +548,10 @@ export const activateOneUser = async (req, res) => {
     });
 
     // Send email notification
-    await new Email(existingUser, { message: "Your account has been activated! now you can login to your dasshboard" }).sendNotification();
+    await new Email(existingUser, { 
+      message: "Your account has been activated! Now you can login to your dashboard",
+      title: "Account Activated"
+    }).sendNotification();
 
     return res.status(200).json({ success: true, message: "User activated successfully" });
   } catch (error) {
@@ -562,7 +577,10 @@ export const deactivateOneUser = async (req, res) => {
     });
 
     // Send email notification
-    await new Email(existingUser, { message: "Your account has been deactivated." }).sendNotification();
+    await new Email(existingUser, { 
+      message: "Your account has been deactivated.",
+      title: "Account Deactivated"
+    }).sendNotification();
 
     return res.status(200).json({ success: true, message: "User deactivated successfully" });
   } catch (error) {

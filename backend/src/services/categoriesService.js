@@ -10,20 +10,18 @@ export const createCategory = async (categoryData, userID) => {
     const existingCategory = await Categories.findOne({
       where: {
         name: categoryData.name,
-        userID, // Ensure the category belongs to the user
+        userID,
       },
     });
 
     if (existingCategory) {
-      throw new Error("Category with the same name already exists for this user.");
+      throw new Error(`Category "${categoryData.name}" already exists in your list.`);
     }
 
-    // Assign userId to category before creating
     categoryData.userID = userID;
-
     return await Categories.create(categoryData);
   } catch (error) {
-    throw new Error(`Error creating Category: ${error.message}`);
+    throw new Error(error.message);
   }
 };
 
@@ -53,15 +51,20 @@ export const deleteOneCategory = async (id, userID) => {
 export const updateOneCategory = async (id, category, userID) => {
   const categoryToUpdate = await Categories.findOne({ where: { id, userID } });
   
-  if (!categoryToUpdate) return null;
+  if (!categoryToUpdate) {
+    throw new Error("Category not found");
+  }
 
-  // Check if the updated name already exists for the user
   const duplicateCategory = await Categories.findOne({
-    where: { name: category.name, userID, id: { [db.Sequelize.Op.ne]: id } },
+    where: { 
+      name: category.name, 
+      userID, 
+      id: { [db.Sequelize.Op.ne]: id } 
+    },
   });
 
   if (duplicateCategory) {
-    throw new Error("A category with this name already exists for this user.");
+    throw new Error(`Category "${category.name}" already exists in your list.`);
   }
 
   await Categories.update(category, { where: { id, userID } });

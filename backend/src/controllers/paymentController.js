@@ -3,6 +3,9 @@ import {
     processCartPayment,
     updatePaymentWithOrder
 } from "../services/PaymentService.js";
+import Email from "../utils/mailer.js";
+import db from "../database/models/index.js";
+const Users = db["Users"];
 
 export const paymentController = async (req, res) => {
   try {
@@ -94,6 +97,21 @@ export const processCartPaymentController = async (req, res) => {
 
     const result = await processCartPayment(userID, number, amount, items, orderDetails);
 
+    // Get the buyer's information
+    const buyer = await Users.findByPk(userID);
+    if (buyer) {
+      // Send payment confirmation email
+      try {
+        await new Email(buyer, {
+          message: `Your payment of ${amount} Rwf has been processed successfully. Order IDs: ${result.orderIds.join(', ')}`,
+          title: "Payment Confirmation"
+        }).sendNotification();
+      } catch (emailError) {
+        console.error("Error sending payment confirmation email:", emailError);
+        // Don't throw error, continue with response
+      }
+    }
+
     return res.status(200).json({
       success: true,
       message: "Payment and orders processed successfully",
@@ -124,6 +142,28 @@ export const updatePaymentOrderController = async (req, res) => {
     const updated = await updatePaymentWithOrder(paymentId, orderId);
 
     if (updated) {
+      // Get the payment details including user information
+      const payment = await db.Payments.findOne({
+        where: { id: paymentId },
+        include: [{
+          model: Users,
+          as: 'user'
+        }]
+      });
+
+      if (payment && payment.user) {
+        // Send payment update email
+        try {
+          await new Email(payment.user, {
+            message: `Your payment (ID: ${paymentId}) has been updated with order ID: ${orderId}`,
+            title: "Payment Update"
+          }).sendNotification();
+        } catch (emailError) {
+          console.error("Error sending payment update email:", emailError);
+          // Don't throw error, continue with response
+        }
+      }
+
       return res.status(200).json({
         success: true,
         message: "Payment updated with order ID"

@@ -333,12 +333,28 @@ const ProductPanel = () => {
   };
 
   const handleEditProduct = (product) => {
+    // Ensure we're passing all necessary data
+    const productData = {
+      id: product.id,
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      quantity: product.quantity,
+      status: product.status,
+      image: product.image,
+      categoryID: product.category?.id,
+      category: product.category
+    };
+
+    console.log('Navigating to edit with data:', productData); // Debug log
+
+    // Use the correct path that matches your App.js route
     navigate("/dashboard/seller/add-product", { 
       state: { 
         editMode: true, 
-        productData: product,
-        returnUrl: window.location.pathname // Store the current path
-      }
+        productData: productData
+      },
+      replace: true
     });
   };
 

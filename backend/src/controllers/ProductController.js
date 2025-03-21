@@ -36,6 +36,7 @@ import {
 } from "../services/categoriesService.js";
 
 import fs from 'fs';
+import { Op } from "sequelize";
 
 export const addProductsController = async (req, res) => {
   try {
@@ -53,24 +54,44 @@ export const addProductsController = async (req, res) => {
     // Create product data object
     const productData = {
       ...req.body,
-      image: `/uploads/${req.file.filename}`, // Store relative path
-      userID: req.user.id, // Changed from userId to userID to match model
-      status: "Pending Approval" // Set initial status to Pending Approval
+      image: `/uploads/${req.file.filename}`,
+      userID: req.user.id,
+      status: "Pending Approval"
     };
-
-    // Validate required fields
-    const requiredFields = ['name', 'price', 'description', 'categoryID'];
-    for (const field of requiredFields) {
-      if (!productData[field]) {
-        return res.status(400).json({
-          success: false,
-          message: `${field} is required`
-        });
-      }
-    }
 
     // Add the product
     const product = await createProducts(productData);
+
+    // Create notifications for admins without email
+    try {
+      const admins = await Users.findAll({ where: { role: "admin" } });
+      
+      // Create in-app notifications only
+      for (const admin of admins) {
+        await Notification.create({
+          userID: admin.id,
+          title: 'New Product Requires Approval',
+          message: `A new product "${productData.name}" has been submitted and requires your approval.`,
+          type: 'NEW_PRODUCT',
+          relatedId: product.id
+        });
+      }
+
+      // Try to send emails, but don't block on failure
+      try {
+        for (const admin of admins) {
+          await new Email(admin, { 
+            message: `A new product "${productData.name}" has been submitted and requires your approval.`
+          }).sendNotification().catch(console.error);
+        }
+      } catch (emailError) {
+        console.error('Email notification failed:', emailError);
+        // Continue without email notifications
+      }
+    } catch (notifError) {
+      console.error('Notification creation error:', notifError);
+      // Continue even if notifications fail
+    }
 
     // Construct full image URL for response
     const responseData = {
@@ -106,46 +127,76 @@ export const deleteOneProductsController = async (req, res) => {
   try {
     const { id } = req.params;
     const userID = req.user.id;
-    const data = await getOneProductsWithDetails(id);
-    if (!data) {
-      return res.status(404).json({
-        message: "product detail not found",
-        data: [],
-      });
-    }
 
-
-    const admins = await Users.findAll({ where: { role: "admin" } });
-    await new Email(req.user, { message:  `Confirmation ! Your product ${data.name} has been deleted by your self ! . ` }).sendNotification();
-
-    for (const admin of admins) {
-      await Notification.create({
-        userID: admin.id,
-        title: `Seller ${req.user.name} has deleted his product  `,
-        message: `A new Product ${req.body.name} has been posted need your approval to be in stock.`,
-        type: "admin",
-      });
-  
-      // Send email notification to each admin
-      await new Email(admin, { message: `A new Product ${req.body.name} has been posted need your approval to be in stock. approval or reject !.` }).sendNotification();
-    }
-    const Products = await deleteOneProducts(req.params.id);
-
-    if (!Products) {
+    // First, get the product details
+    const product = await getOneProductsWithDetails(id);
+    
+    if (!product) {
       return res.status(404).json({
         success: false,
-        message: "Products not found",
+        message: "Product not found"
       });
     }
+
+    // Check if the user owns this product
+    if (product.userID !== userID) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only delete your own products"
+      });
+    }
+
+    // Delete the product image if it exists
+    if (product.image) {
+      try {
+        const imagePath = product.image.replace(/^\/uploads\//, '');
+        const fullPath = `uploads/${imagePath}`;
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+        }
+      } catch (imageError) {
+        console.error('Error deleting image file:', imageError);
+        // Continue with product deletion even if image deletion fails
+      }
+    }
+
+    // Delete the product
+    await deleteOneProducts(id);
+
+    // Send notification to admins
+    try {
+      const admins = await Users.findAll({ where: { role: "admin" } });
+      
+      // Send notification to the seller
+      await new Email(req.user, {
+        title: "Product Deletion Confirmation",
+        message: `Your product "${product.name}" has been deleted successfully.`
+      }).sendNotification();
+
+      // Notify admins
+      for (const admin of admins) {
+        await Notification.create({
+          userID: admin.id,
+          title: `Product Deleted by Seller`,
+          message: `Product "${product.name}" has been deleted by seller ${req.user.firstname} ${req.user.lastname}.`,
+          type: "PRODUCT_DELETED"
+        });
+      }
+    } catch (notifError) {
+      console.error('Notification error:', notifError);
+      // Don't block the deletion process if notification fails
+    }
+
     return res.status(200).json({
       success: true,
-      message: "Products deleted successfully",
-      Products,
+      message: "Product deleted successfully"
     });
   } catch (error) {
+    console.error('Delete product error:', error);
     return res.status(500).json({
+      success: false,
       message: "Something went wrong",
-      error,
+      error: error.message
     });
   }
 };
@@ -154,12 +205,19 @@ export const deleteOneProductsController = async (req, res) => {
 export const activateProductsController = async (req, res) => {
   try {
     const { id } = req.params;
-    const userID = req.user.id; // Get logged-in user's ID
+    const userID = req.user.id;
+
+    // Debug logging
+    console.log('Activating product:', {
+      productId: id,
+      userId: userID,
+      userRole: req.user.role
+    });
 
     // Check if the user is an admin
     let role = req.user.role;
     if (role !== "admin") {
-      return res.status(400).json({
+      return res.status(403).json({
         success: false,
         message: "You are not allowed to activate products",
       });
@@ -167,6 +225,8 @@ export const activateProductsController = async (req, res) => {
 
     // Fetch product details
     const data = await getOneProductsWithDetails(id);
+    console.log('Product details:', data);
+
     if (!data) {
       return res.status(404).json({
         success: false,
@@ -177,6 +237,8 @@ export const activateProductsController = async (req, res) => {
 
     // Fetch the user associated with the product
     const User1 = await Users.findOne({ where: { id: data.userID } });
+    console.log('Product owner details:', User1);
+
     if (!User1) {
       return res.status(404).json({
         success: false,
@@ -184,18 +246,34 @@ export const activateProductsController = async (req, res) => {
       });
     }
 
-    await new Email(User1, { message: ` ! Your product ${data.name}  has been activated successfully ! now it status is Stock in !`}).sendNotification();
+    try {
+      // Send email notification
+      await new Email(User1, {
+        title: "Product Activation Notice",
+        message: `Your product ${data.name} has been activated successfully! Now it status is In Stock!`
+      }).sendNotification();
+    } catch (emailError) {
+      console.error('Email notification error:', emailError);
+      // Continue even if email fails
+    }
 
-    // Send a notification to the user
-    await Notification.create({
-      userID: User1.id,
-      title: `Product Activation!`,
-      message: `Your product ${data.name} has been activated successfully and is now "In Stock". You can check it in the system.`,
-      type: "activation",
-    });
+    try {
+      // Create in-app notification
+      await Notification.create({
+        userID: User1.id,
+        title: `Product Activation!`,
+        message: `Your product ${data.name} has been activated successfully and is now "In Stock". You can check it in the system.`,
+        type: "activation",
+      });
+    } catch (notifError) {
+      console.error('Notification creation error:', notifError);
+      // Continue even if notification fails
+    }
 
-    // Update the product status to "In Stock"
+    // Update product status
     const updatedProduct = await status_change(id, "In Stock");
+    console.log('Updated product:', updatedProduct);
+
     if (!updatedProduct) {
       return res.status(404).json({
         success: false,
@@ -203,19 +281,14 @@ export const activateProductsController = async (req, res) => {
       });
     }
 
-    // Construct full image URL for response
-    const responseData = {
-      ...updatedProduct.toJSON(),
-      image: updatedProduct.image ? `${process.env.BASE_URL}${updatedProduct.image}` : null
-    };
-
     return res.status(200).json({
       success: true,
       message: "Product activated successfully and status updated to 'In Stock'",
-      data: responseData
+      data: updatedProduct
     });
+
   } catch (error) {
-    console.error(error);
+    console.error('Error in activateProductsController:', error);
     return res.status(500).json({
       success: false,
       message: "Something went wrong",
@@ -754,4 +827,81 @@ export const getApprovedProducts = async (req, res) => {
       error: error.message
     });
   }
+};
+
+export const searchProductsController = async (req, res) => {
+    try {
+        const { q, category, minPrice, maxPrice } = req.query;
+        
+        // Build search query
+        const whereClause = {
+            status: "In Stock", // Only show in-stock products
+            [Op.or]: [
+                { name: { [Op.iLike]: `%${q}%` } },
+                { description: { [Op.iLike]: `%${q}%` } }
+            ]
+        };
+
+        // Add price filter if provided
+        if (minPrice || maxPrice) {
+            whereClause.price = {};
+            if (minPrice) whereClause.price[Op.gte] = minPrice;
+            if (maxPrice) whereClause.price[Op.lte] = maxPrice;
+        }
+
+        // Add category filter if provided
+        if (category) {
+            whereClause.categoryID = category;
+        }
+
+        const products = await Products.findAll({
+            where: whereClause,
+            include: [
+                {
+                    model: Categories,
+                    as: 'category',
+                    attributes: ['id', 'name']
+                },
+                {
+                    model: Users,
+                    as: 'user',
+                    attributes: ['id', 'firstname', 'lastname', 'image', 'status'],
+                    where: { status: 'active' } // Only show products from active sellers
+                }
+            ],
+            order: [['createdAt', 'DESC']]
+        });
+
+        // Transform the response to match the approved products format
+        const transformedProducts = products.map(product => ({
+            id: product.id,
+            name: product.name,
+            description: product.description,
+            price: parseFloat(product.price) || 0,
+            quantity: parseInt(product.quantity) || 0,
+            image: product.image,
+            status: product.status,
+            categoryID: product.categoryID,
+            userID: product.user.id,
+            firstname: product.user.firstname,
+            lastname: product.user.lastname,
+            userImage: product.user.image,
+            category: product.category,
+            createdAt: product.createdAt,
+            updatedAt: product.updatedAt
+        }));
+
+        return res.status(200).json({
+            success: true,
+            count: transformedProducts.length,
+            data: transformedProducts
+        });
+    } catch (error) {
+        console.error('Search error:', error);
+        return res.status(500).json({
+            success: false,
+            message: "Error searching products",
+            error: error.message
+        });
+    }
 };

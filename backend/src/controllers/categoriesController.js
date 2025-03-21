@@ -11,15 +11,32 @@ import {
 export const addCategoryController = async (req, res) => {
   try {
     if (req.user.role !== "seller") {
-      return res.status(401).json({ success: false, message: "Not authorized, you are not an seller" });
+      return res.status(401).json({ 
+        success: false, 
+        message: "Not authorized, you are not a seller" 
+      });
     }
 
     const newCategory = await createCategory(req.body, req.user.id);
-    return res.status(201).json({ success: true, message: "Category created successfully", Category: newCategory });
+    return res.status(201).json({ 
+      success: true, 
+      message: "Category created successfully", 
+      Category: newCategory 
+    });
 
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ success: false, message: error.message });
+    // Check for specific error types
+    if (error.message.includes("already exists")) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "A category with this name already exists in your list" 
+      });
+    }
+    return res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
   }
 };
 
@@ -58,19 +75,37 @@ export const deleteOneCategoryController = async (req, res) => {
 export const updateOneCategoryController = async (req, res) => {
   try {
     if (req.user.role !== "seller") {
-      return res.status(401).json({ success: false, message: "Not authorized, you are not an seller" });
+      return res.status(401).json({ 
+        success: false, 
+        message: "Not authorized, you are not a seller" 
+      });
     }
 
     const updatedCategory = await updateOneCategory(req.params.id, req.body, req.user.id);
     if (!updatedCategory) {
-      return res.status(404).json({ success: false, message: "Category not found" });
+      return res.status(404).json({ 
+        success: false, 
+        message: "Category not found" 
+      });
     }
 
-    return res.status(200).json({ success: true, message: "Category updated successfully", Category: updatedCategory });
+    return res.status(200).json({ 
+      success: true, 
+      message: "Category updated successfully", 
+      Category: updatedCategory 
+    });
 
   } catch (error) {
-    console.log(error.message);
-    return res.status(500).json({ message: "Something went wrong", error });
+    if (error.message.includes("already exists")) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "A category with this name already exists in your list" 
+      });
+    }
+    return res.status(500).json({ 
+      success: false, 
+      message: "Something went wrong" 
+    });
   }
 };
 

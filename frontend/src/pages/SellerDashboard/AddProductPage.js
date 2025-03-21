@@ -1,52 +1,23 @@
-import React, { useState } from "react";
-import "bootstrap/dist/css/bootstrap.min.css";
-import { Button, Offcanvas } from "react-bootstrap";
+import React from "react";
 import { useLocation } from "react-router-dom";
-
-import Header from "../../components_part/header";
-import Sidebar from "../../components_part/DashboardSidebar"; // Import Sidebar Component
-import Footer from "../../components_part/Footer";
 import ProductForm from "./productForm";
-import Outofstock from "./ListOfOutProduct";
-import Title from "../../components_part/TitleCard";
+import SellerDashboardPage from "./SellerDashboardPage";
 
-const Dashboard = () => {
-  const [show, setShow] = useState(false);
+const AddProductPage = () => {
   const location = useLocation();
-  const { editMode, productData } = location.state || {};
+  const { editMode = false, productData = null } = location.state || {};
 
   return (
-    <div className="dashboard" style={{ backgroundColor: "whitesmoke" }}>
-      <Header setShow={setShow} />
-      {/* <UserHeader setShow={setShow} /> */}
-
-      <div className="container-fluid">
-        <div className="row">
-          <Sidebar show={show} setShow={setShow} />
-          <main className="col-md-10  allcontent">
-            <div className="row">
-              {/* User Product Cards */}
-              <section className="product-section">
-                <div className="container">
-                  <div className="row">
-                    {/* User 1 */}
-
-                    <ProductForm 
-                      editMode={editMode} 
-                      productData={productData}
-                    />
-             
-                    
-                    {/* <Footer/> */}
-                  </div>  
-                </div>
-              </section>
-            </div>
-          </main>
-        </div>
+    <SellerDashboardPage>
+      <div className="content-wrapper">
+        <ProductForm 
+          editMode={editMode} 
+          productData={productData}
+          key={productData?.id || 'new'}
+        />
       </div>
-    </div>
+    </SellerDashboardPage>
   );
 };
 
-export default Dashboard;
+export default AddProductPage;
