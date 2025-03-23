@@ -252,27 +252,73 @@ export const deleteUser = async (id) => {
 };
 
 export const activateUser = async (id) => {
-  const userToActivate = await users.findOne(
-    { where: { id } },
-    { attributes: { exclude: ["password"] } }
-  );
-  if (userToActivate) {
+  try {
+    console.log('[INFO] Attempting to activate user:', id);
+    
+    const userToActivate = await users.findOne({
+      where: { id },
+      attributes: { exclude: ["password"] }
+    });
+
+    if (!userToActivate) {
+      console.log('[ERROR] User not found for activation:', id);
+      return null;
+    }
+
+    if (userToActivate.status === 'active') {
+      console.log('[INFO] User is already active:', id);
+      return userToActivate;
+    }
+
     await users.update({ status: "active" }, { where: { id } });
-    return userToActivate;
+    
+    // Fetch the updated user
+    const updatedUser = await users.findOne({
+      where: { id },
+      attributes: { exclude: ["password"] }
+    });
+    
+    console.log('[INFO] Successfully activated user:', id);
+    return updatedUser;
+  } catch (error) {
+    console.error('[ERROR] Failed to activate user:', error);
+    throw error;
   }
-  return null;
 };
 
 export const deactivateUser = async (id) => {
-  const userToDeactivate = await users.findOne(
-    { where: { id } },
-    { attributes: { exclude: ["password"] } }
-  );
-  if (userToDeactivate) {
+  try {
+    console.log('[INFO] Attempting to deactivate user:', id);
+    
+    const userToDeactivate = await users.findOne({
+      where: { id },
+      attributes: { exclude: ["password"] }
+    });
+
+    if (!userToDeactivate) {
+      console.log('[ERROR] User not found for deactivation:', id);
+      return null;
+    }
+
+    if (userToDeactivate.status === 'inactive') {
+      console.log('[INFO] User is already inactive:', id);
+      return userToDeactivate;
+    }
+
     await users.update({ status: "inactive" }, { where: { id } });
-    return userToDeactivate;
+    
+    // Fetch the updated user
+    const updatedUser = await users.findOne({
+      where: { id },
+      attributes: { exclude: ["password"] }
+    });
+    
+    console.log('[INFO] Successfully deactivated user:', id);
+    return updatedUser;
+  } catch (error) {
+    console.error('[ERROR] Failed to deactivate user:', error);
+    throw error;
   }
-  return null;
 };
 
 

@@ -256,11 +256,11 @@ const HomePage = () => {
                 <p className="text-muted">{sections.trending.subtitle}</p>
               </div>
               {loading.trending ? renderLoading("trending products") : (
-                <div className="row g-4">
+              <div className="row g-4">
                   {data.trending.map((product) => (
-                    <div key={product.id} className="col-md-4">
-                      <Card className="h-100 border-0 shadow-sm hover-card">
-                        <div className="card-img-container">
+                  <div key={product.id} className="col-md-4">
+                    <Card className="h-100 border-0 shadow-sm hover-card">
+                      <div className="card-img-container">
                           <img 
                             src={product.image.startsWith('http') 
                               ? product.image 
@@ -276,7 +276,7 @@ const HomePage = () => {
                             <span className="season-badge">
                               {getSeasonIcon(product.season)} {RWANDA_SEASONS[product.season]?.label}
                             </span>
-                          </div>
+                        </div>
                         </div>
                         <Card.Body className="text-center d-flex flex-column justify-content-between">
                           <div>
@@ -284,19 +284,19 @@ const HomePage = () => {
                             <Card.Text className="text-muted mb-3">{RWANDA_SEASONS[product.season]?.description}</Card.Text>
                             <p className="price mb-2">RWF {product.price?.toLocaleString()}</p>
                             <p className="stock mb-3">Stock: {product.quantity} units</p>
-                          </div>
+                      </div>
                           <Button 
                             variant="outline-success" 
                             className="rounded-pill px-4"
                             onClick={() => navigate(`/product/${product.id}`)}
                           >
-                            View Details
-                          </Button>
-                        </Card.Body>
-                      </Card>
-                    </div>
-                  ))}
-                </div>
+                          View Details
+                        </Button>
+                      </Card.Body>
+                    </Card>
+                  </div>
+                ))}
+              </div>
               )}
             </section>
 
@@ -304,11 +304,11 @@ const HomePage = () => {
             <section className="bg-light p-4 rounded mb-4">
               <SeasonalNav />
               {loading.seasonal ? renderLoading("seasonal products") : (
-                <div className="row g-4">
+              <div className="row g-4">
                   {data.seasonal.map((product) => (
                     <div key={product.id} className="col-md-3">
-                      <Card className="h-100 border-0 shadow-sm hover-card">
-                        <div className="seasonal-img-container">
+                    <Card className="h-100 border-0 shadow-sm hover-card">
+                      <div className="seasonal-img-container">
                           <img 
                             src={product.image.startsWith('http') 
                               ? product.image 
@@ -325,7 +325,7 @@ const HomePage = () => {
                               {getSeasonIcon(product.season)} 
                               <span>{RWANDA_SEASONS[product.season]?.label}</span>
                             </span>
-                          </div>
+                        </div>
                         </div>
                         <Card.Body className="text-center d-flex flex-column justify-content-between">
                           <div>
@@ -333,19 +333,19 @@ const HomePage = () => {
                             <Card.Text className="text-muted mb-3">{RWANDA_SEASONS[product.season]?.description}</Card.Text>
                             <p className="price mb-2">RWF {product.price?.toLocaleString()}</p>
                             <p className="stock mb-3">Stock: {product.quantity} units</p>
-                          </div>
+                      </div>
                           <Button 
                             variant="success" 
                             className="rounded-pill px-4"
                             onClick={() => navigate(`/product/${product.id}`)}
                           >
                             View Details
-                          </Button>
-                        </Card.Body>
-                      </Card>
-                    </div>
-                  ))}
-                </div>
+                        </Button>
+                      </Card.Body>
+                    </Card>
+                  </div>
+                ))}
+              </div>
               )}
             </section>
 
@@ -356,11 +356,11 @@ const HomePage = () => {
                 <p className="text-muted">{sections.available.subtitle}</p>
               </div>
               {loading.available ? renderLoading("available products") : (
-                <div className="row g-4">
+              <div className="row g-4">
                   {data.available.map((product) => (
-                    <div key={product.id} className="col-md-4">
-                      <Card className="h-100 border-0 shadow-sm hover-card">
-                        <div className="available-img-container">
+                  <div key={product.id} className="col-md-4">
+                    <Card className="h-100 border-0 shadow-sm hover-card">
+                      <div className="available-img-container">
                           <img 
                             src={product.image.startsWith('http') 
                               ? product.image 
@@ -376,7 +376,7 @@ const HomePage = () => {
                             <span className="season-badge">
                               {getSeasonIcon(product.season)} {RWANDA_SEASONS[product.season]?.label}
                             </span>
-                          </div>
+                        </div>
                         </div>
                         <Card.Body className="text-center d-flex flex-column justify-content-between">
                           <div>
@@ -384,19 +384,19 @@ const HomePage = () => {
                             <Card.Text className="text-muted mb-3">{RWANDA_SEASONS[product.season]?.description}</Card.Text>
                             <p className="price mb-2">RWF {product.price?.toLocaleString()}</p>
                             <p className="stock mb-3">Stock: {product.quantity} units</p>
-                          </div>
-                          <Button 
-                            variant="success" 
-                            className="rounded-pill px-4"
+                      </div>
+                        <Button 
+                          variant="success" 
+                          className="rounded-pill px-4"
                             onClick={() => navigate(`/product/${product.id}`)}
-                          >
+                        >
                             View Details
-                          </Button>
-                        </Card.Body>
-                      </Card>
-                    </div>
-                  ))}
-                </div>
+                        </Button>
+                      </Card.Body>
+                    </Card>
+                  </div>
+                ))}
+              </div>
               )}
             </section>
           </div>

@@ -119,35 +119,42 @@ const PendingProducts = () => {
           </div>
         ) : (
           <>
-            <Row>
+            <Row className="products-grid">
               {currentProducts.map((product) => (
-                <Col key={product.id} md={4} className="mb-4">
+                <Col key={product.id} lg={4} md={6} className="mb-4">
                   <Card className="product-card">
-                    <Card.Img
-                      variant="top"
-                      src={`${process.env.REACT_APP_BASE_URL}${product.image}`}
-                      alt={product.name}
-                      className="product-image"
-                    />
-                    <Card.Body>
-                      <Card.Title>{product.name}</Card.Title>
-                      <Card.Text>Price: ${product.price}</Card.Text>
-                      <Card.Text>Status: {product.status}</Card.Text>
-                      <Card.Text>
+                    <div className="product-image-container">
+                      <Card.Img
+                        variant="top"
+                        src={`${process.env.REACT_APP_BASE_URL}${product.image}`}
+                        alt={product.name}
+                        className="product-image"
+                        onError={(e) => {
+                          e.target.src = 'https://via.placeholder.com/400x400?text=No+Image';
+                        }}
+                      />
+                    </div>
+                    <Card.Body className="product-card-body">
+                      <Card.Title className="product-title">{product.name}</Card.Title>
+                      <Card.Text className="product-price">Price: ${product.price}</Card.Text>
+                      <Card.Text className="product-status">Status: {product.status}</Card.Text>
+                      <Card.Text className="product-seller">
                         Seller: {product.User?.firstName} {product.User?.lastName}
                       </Card.Text>
-                      <div className="d-flex justify-content-between">
+                      <div className="button-container">
                         <Button
                           variant="success"
+                          className="action-button approve-button"
                           onClick={() => handleApprove(product.id)}
                         >
-                          <FaCheckCircle /> Approve
+                          <FaCheckCircle className="button-icon" /> Approve
                         </Button>
                         <Button
                           variant="danger"
+                          className="action-button reject-button"
                           onClick={() => handleReject(product.id)}
                         >
-                          <FaTimesCircle /> Reject
+                          <FaTimesCircle className="button-icon" /> Reject
                         </Button>
                       </div>
                     </Card.Body>
@@ -184,27 +191,156 @@ const PendingProducts = () => {
         .content-section {
           background: white;
           padding: 2rem;
-          border-radius: 8px;
+          border-radius: 12px;
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .products-grid {
+          margin: 0 -1rem;
         }
 
         .product-card {
           height: 100%;
-          transition: transform 0.2s;
+          width: 100%;
+          transition: all 0.3s ease;
+          background: white;
+          border-radius: 12px;
+          overflow: hidden;
+          border: none;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .product-card:hover {
           transform: translateY(-5px);
+          box-shadow: 0 8px 16px rgba(21, 128, 61, 0.15);
+        }
+
+        .product-image-container {
+          position: relative;
+          width: 100%;
+          height: 250px; /* Fixed height for image container */
+          overflow: hidden;
+          background-color: #f8f9fa;
+          border-bottom: 1px solid rgba(0,0,0,0.1);
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .product-image {
-          height: 200px;
+          width: 100%;
+          height: 100%;
           object-fit: cover;
+          transition: transform 0.5s ease;
+        }
+
+        .product-card:hover .product-image {
+          transform: scale(1.05);
+        }
+
+        .product-card-body {
+          padding: 1.5rem;
+        }
+
+        .product-title {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #15803d;
+          margin-bottom: 1rem;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .product-price {
+          font-size: 1.1rem;
+          color: #15803d;
+          font-weight: 500;
+          margin-bottom: 0.75rem;
+        }
+
+        .product-status {
+          color: #666;
+          margin-bottom: 0.75rem;
+          font-size: 0.95rem;
+        }
+
+        .product-seller {
+          color: #666;
+          margin-bottom: 1.5rem;
+          font-size: 0.95rem;
+        }
+
+        .button-container {
+          display: flex;
+          gap: 1rem;
+          justify-content: space-between;
+          margin-top: auto;
+        }
+
+        .action-button {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1rem;
+          border-radius: 8px;
+          font-weight: 500;
+          transition: all 0.3s ease;
+          border: none;
+        }
+
+        .button-icon {
+          font-size: 1.1rem;
+        }
+
+        .approve-button {
+          background-color: #16a34a;
+        }
+
+        .approve-button:hover {
+          background-color: #15803d;
+          transform: translateY(-2px);
+        }
+
+        .reject-button {
+          background-color: #ef4444;
+        }
+
+        .reject-button:hover {
+          background-color: #dc2626;
+          transform: translateY(-2px);
+        }
+
+        @media (max-width: 1200px) {
+          .content-section {
+            padding: 1.5rem;
+          }
         }
 
         @media (max-width: 768px) {
           .content-section {
             padding: 1rem;
+            border-radius: 0;
+          }
+          
+          .product-image-container {
+            height: 200px; /* Smaller height for mobile */
+          }
+
+          .product-card-body {
+            padding: 1rem;
+          }
+
+          .button-container {
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+
+          .action-button {
+            width: 100%;
           }
         }
       `}</style>
@@ -212,4 +348,4 @@ const PendingProducts = () => {
   );
 };
 
-export default PendingProducts; 
+export default PendingProducts;

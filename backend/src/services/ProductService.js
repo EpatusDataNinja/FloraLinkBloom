@@ -111,6 +111,11 @@ export const outstock = async (userID) => {
         {
           model: Categories,
           as: "category",
+        },
+        {
+          model: users,
+          as: "user",
+          attributes: ["id", "firstname", "lastname", "email"]
         }
       ],
       order: [['createdAt', 'DESC']] // Sort by newest first
@@ -283,26 +288,47 @@ export const updateOne = async (id, data) => {
   }
 };
 
-export const status_change = async (id, status) => {
+export const status_change = async (id, newStatus) => {
   try {
-    const productToUpdate = await Products.findOne({ where: { id } });
-    if (!productToUpdate) {
-      return null;
-    }
-
-    await Products.update({ status: status }, { where: { id } });
-    
-    // Fetch and return the updated product with its category
-    const updatedProduct = await Products.findByPk(id, {
+    const productToUpdate = await Products.findOne({ 
+      where: { id },
       include: [
         {
           model: Categories,
           as: "category",
+        },
+        {
+          model: users,
+          as: "user",
+          attributes: ["id", "firstname", "lastname", "email"]
         }
       ]
     });
 
-    return updatedProduct;
+    if (!productToUpdate) {
+      throw new Error("Product not found");
+    }
+
+    // Define valid status transitions
+    const validTransitions = {
+      "Pending Approval": ["In Stock", "rejected"],
+      "Out of Stock": ["In Stock"],
+      "rejected": [], // Rejected products need manual review/resubmission
+      "In Stock": ["Out of Stock"]
+    };
+
+    // Check if the status transition is valid
+    if (!validTransitions[productToUpdate.status]?.includes(newStatus)) {
+      throw new Error(`Invalid status transition from ${productToUpdate.status} to ${newStatus}`);
+    }
+
+    await Products.update({ status: newStatus }, { where: { id } });
+    
+    // Return updated product
+    return {
+      ...productToUpdate.toJSON(),
+      status: newStatus
+    };
   } catch (error) {
     console.error("Error in status_change:", error);
     throw error;

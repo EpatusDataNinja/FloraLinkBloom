@@ -32,116 +32,124 @@ const Notification = db["Notifications"];
 
 
 export const Signup = async (req, res) => {
+  let transaction;
   try {
-    if (!req.body.role || req.body.role === "" || 
-      !req.body.firstname || req.body.firstname === "" ||
-       !req.body.lastname || req.body.lastname === "" ||
-        !req.body.email || req.body.email === "" || 
-        !req.body.phone || req.body.phone === ""
-    || !req.body.address || req.body.address === "" || 
-    !req.body.gender || req.body.gender === "") {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide all information",
-      });
-    }
-
-
-
-    const { password, confirmPassword } = req.body;
-
-    // Check if password is provided
-    if (!password || password === "") {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a password",
-      });
-    }
-  
-    // Check if confirmPassword is provided
-    if (!confirmPassword || confirmPassword === "") {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a confirmation password",
-      });
-    }
-  
-    // Compare password and confirmPassword
-    if (password !== confirmPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "Passwords do not match",
-      });
-    }
-    if (req.body.role !== "buyer" && req.body.role !== "seller") {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a valid role",
-      });
-    }
+    // Log the database connection status
+    console.log("Database connection status:", db.sequelize?.connectionManager?.pool?.length ? "Connected" : "Not connected");
     
-  
+    // Ensure database connection is established
+    if (!db.sequelize) {
+      console.error("Database connection not established. DB object:", JSON.stringify(db, null, 2));
+      throw new Error("Database connection not established");
+    }
 
-    const userExist = await getUserByEmail(req.body.email);
-    if (userExist) {
+    // Start transaction
+    transaction = await db.sequelize.transaction();
+    console.log("Starting signup process with transaction:", transaction.id);
+    
+    // Log the request body (excluding password)
+    const logSafeBody = { ...req.body };
+    delete logSafeBody.password;
+    console.log("Request body:", logSafeBody);
+    
+    // Validate required fields
+    const requiredFields = ['role', 'firstname', 'lastname', 'email', 'phone', 'address', 'gender', 'password'];
+    const missingFields = requiredFields.filter(field => !req.body[field]);
+    
+    if (missingFields.length > 0) {
+      console.log("Missing required fields:", missingFields);
+      await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: "Email already exists",
+        message: `Missing required fields: ${missingFields.join(', ')}`
       });
     }
-    const Exist = await getUserByPhone(req.body.phone);
-    if (Exist) {
-      return res.status(400).json({
-        success: false,
-        message: "your Phone number already exists",
-      });
-    }
-    // // Generate password
-    // const password = `D${Math.random().toString(36).slice(-8)}`;
 
-    // // Create user with generated password and set status to active
-    // req.body.password = password;
-    
-
-      req.body.status = "inactive";
-    
-    
-
-    const newUser = await createUser(req.body);
-    newUser.password = password;
-
-  // notification 
-  await Notification.create({
-    userID: newUser.id,
-    title: "Account Pending Approval",
-    message: "Your account is awaiting admin approval. You will be notified once it is reviewed.",
-    type: "account",
-  });
-
-  // Send email notification to the user
-  await new Email(newUser, { 
-    message: "Your account is pending approval. You will be notified once reviewed.",
-    title: "Account Registration"
-  }).sendNotification();
-
-  // Find all admins
-  const admins = await Users.findAll({ where: { role: "admin" } });
-
-  // Notify all admins about the new user signup
-  for (const admin of admins) {
-    await Notification.create({
-      userID: admin.id,
-      title: "New User Awaiting Approval",
-      message: `A new user ${req.body.role} called ${req.body.firstname} ${req.body.lastname} has signed up and requires approval.`,
-      type: "admin",
+    // Check for existing email
+    const existingEmail = await Users.findOne({
+      where: { email: req.body.email }
     });
 
-    // Send email notification to each admin
-    await new Email(admin, { 
-      message: `A new user ${req.body.role} called ${req.body.firstname} ${req.body.lastname} has been registered in system and needs to be checked and approved or rejected!`,
-      title: "New User Registration"
-    }).sendNotification();
-  }
+    if (existingEmail) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Email already exists"
+      });
+    }
+
+    // Check for existing phone
+    const existingPhone = await Users.findOne({
+      where: { phone: req.body.phone }
+    });
+
+    if (existingPhone) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Phone number already exists"
+      });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(req.body.password, salt);
+
+    // Create user with transaction
+    const userData = {
+      ...req.body,
+      password: hashedPassword,
+      status: "inactive"
+    };
+
+    const newUser = await Users.create(userData, { transaction });
+
+    // Create notifications with transaction
+    await Notification.create({
+      userID: newUser.id,
+      title: "Account Pending Approval",
+      message: "Your account is awaiting admin approval. You will be notified once it is reviewed.",
+      type: "account",
+      isRead: false
+    }, { transaction });
+
+    // Find admins
+    const admins = await Users.findAll({
+      where: { role: "admin" },
+      attributes: ['id', 'email', 'firstname', 'lastname'],
+      transaction
+    });
+
+    // Create admin notifications with transaction
+    for (const admin of admins) {
+      await Notification.create({
+        userID: admin.id,
+        title: "New User Registration",
+        message: `New ${req.body.role} account requires approval: ${req.body.firstname} ${req.body.lastname}`,
+        type: "admin_approval",
+        isRead: false
+      }, { transaction });
+    }
+
+    // Commit transaction
+    await transaction.commit();
+    console.log("Transaction committed successfully");
+
+    // Send emails (non-blocking)
+    Promise.all([
+      new Email(newUser, {
+        message: "Your account is pending approval. You will be notified once reviewed.",
+        title: "Account Registration"
+      }).sendNotification(),
+      ...admins.map(admin => 
+        new Email(admin, {
+          message: `A new user (${req.body.role}) named ${req.body.firstname} ${req.body.lastname} has registered and requires your approval.`,
+          title: "New User Registration"
+        }).sendNotification()
+      )
+    ]).catch(error => {
+      console.error("Email sending error:", error);
+    });
 
     return res.status(201).json({
       success: true,
@@ -152,17 +160,42 @@ export const Signup = async (req, res) => {
         lastname: newUser.lastname,
         email: newUser.email,
         role: newUser.role,
-        restaurents: newUser.restaurents,
-        role: req.body.role, 
-        gender: req.body.gender, 
-        phone: req.body.phone, 
-      },
+        gender: newUser.gender,
+        phone: newUser.phone
+      }
     });
+
   } catch (error) {
-    console.log(error);
+    console.error("Signup error details:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code
+    });
+    
+    // Rollback transaction if it exists
+    if (transaction) {
+      try {
+        await transaction.rollback();
+        console.log("Transaction rolled back successfully");
+      } catch (rollbackError) {
+        console.error("Transaction rollback failed:", rollbackError);
+      }
+    }
+
+    // Handle specific errors
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({
+        success: false,
+        message: `This ${error.errors[0].path} is already registered`
+      });
+    }
+
     return res.status(500).json({
-      message: "Something went wrong",
-      error,
+      success: false,
+      message: "Failed to create user account",
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
@@ -532,59 +565,135 @@ export const deleteOneUser = async (req, res) => {
 
 export const activateOneUser = async (req, res) => {
   try {
+    console.log('[INFO] Starting user activation process for ID:', req.params.id);
+    
     const existingUser = await getUser(req.params.id);
     if (!existingUser) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      console.log('[ERROR] User not found for activation:', req.params.id);
+      return res.status(404).json({ 
+        success: false, 
+        message: "User not found" 
+      });
     }
 
-    await activateUser(req.params.id);
+    if (existingUser.status === 'active') {
+      console.log('[INFO] User is already active:', req.params.id);
+      return res.status(200).json({
+        success: true,
+        message: "User is already active",
+        user: existingUser
+      });
+    }
 
-    // Send notification
-    await createNotification({
+    const activatedUser = await activateUser(req.params.id);
+    if (!activatedUser) {
+      console.log('[ERROR] Failed to activate user:', req.params.id);
+      return res.status(400).json({
+        success: false,
+        message: "Failed to activate user"
+      });
+    }
+
+    // Create notification for the user
+    await db["Notifications"].create({
       userID: existingUser.id,
       title: "Account Activated",
-      message: "Your account has been activated. You can now log in and use the platform.",
-      type: "account",
+      message: "Your account has been activated. You can now log in to the platform.",
+      type: "account_status",
+      isRead: false
     });
 
     // Send email notification
-    await new Email(existingUser, { 
-      message: "Your account has been activated! Now you can login to your dashboard",
-      title: "Account Activated"
-    }).sendNotification();
+    try {
+      await new Email(existingUser, { 
+        message: "Your account has been activated! You can now log in to your dashboard.",
+        title: "Account Activated"
+      }).sendNotification();
+    } catch (emailError) {
+      console.error('[WARN] Failed to send activation email:', emailError);
+      // Don't fail the request if email fails
+    }
 
-    return res.status(200).json({ success: true, message: "User activated successfully" });
+    console.log('[INFO] Successfully activated user:', req.params.id);
+    return res.status(200).json({ 
+      success: true, 
+      message: "User activated successfully",
+      user: activatedUser
+    });
   } catch (error) {
-    return res.status(500).json({ message: "Something went wrong", error });
+    console.error('[ERROR] Activation error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Internal server error",
+      error: error.message 
+    });
   }
 };
 
 export const deactivateOneUser = async (req, res) => {
   try {
+    console.log('[INFO] Starting user deactivation process for ID:', req.params.id);
+    
     const existingUser = await getUser(req.params.id);
     if (!existingUser) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      console.log('[ERROR] User not found for deactivation:', req.params.id);
+      return res.status(404).json({ 
+        success: false, 
+        message: "User not found" 
+      });
     }
 
-    await deactivateUser(req.params.id);
+    if (existingUser.status === 'inactive') {
+      console.log('[INFO] User is already inactive:', req.params.id);
+      return res.status(200).json({
+        success: true,
+        message: "User is already inactive",
+        user: existingUser
+      });
+    }
 
-    // Send notification
-    await createNotification({
+    const deactivatedUser = await deactivateUser(req.params.id);
+    if (!deactivatedUser) {
+      console.log('[ERROR] Failed to deactivate user:', req.params.id);
+      return res.status(400).json({
+        success: false,
+        message: "Failed to deactivate user"
+      });
+    }
+
+    // Create notification for the user
+    await db["Notifications"].create({
       userID: existingUser.id,
       title: "Account Deactivated",
       message: "Your account has been deactivated. Please contact support for assistance.",
-      type: "account",
+      type: "account_status",
+      isRead: false
     });
 
     // Send email notification
-    await new Email(existingUser, { 
-      message: "Your account has been deactivated.",
-      title: "Account Deactivated"
-    }).sendNotification();
+    try {
+      await new Email(existingUser, { 
+        message: "Your account has been deactivated. Please contact support if you need assistance.",
+        title: "Account Deactivated"
+      }).sendNotification();
+    } catch (emailError) {
+      console.error('[WARN] Failed to send deactivation email:', emailError);
+      // Don't fail the request if email fails
+    }
 
-    return res.status(200).json({ success: true, message: "User deactivated successfully" });
+    console.log('[INFO] Successfully deactivated user:', req.params.id);
+    return res.status(200).json({ 
+      success: true, 
+      message: "User deactivated successfully",
+      user: deactivatedUser
+    });
   } catch (error) {
-    return res.status(500).json({ message: "Something went wrong", error });
+    console.error('[ERROR] Deactivation error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Internal server error",
+      error: error.message 
+    });
   }
 };
 

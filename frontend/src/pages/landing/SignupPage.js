@@ -4,12 +4,12 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import UserHeader from "../../components_part/user_header";
+import axios from 'axios';
 
 const SignupPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [role, setRole] = useState('buyer');
-
   const [formData, setFormData] = useState({
     firstname: '',
     lastname: '',
@@ -20,6 +20,7 @@ const SignupPage = () => {
     gender: 'Male',
     address: '',
   });
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -29,38 +30,65 @@ const SignupPage = () => {
     }
   }, [location]);
 
+  const validateForm = () => {
+    const newErrors = {};
+    if (!formData.firstname) newErrors.firstname = 'First name is required';
+    if (!formData.lastname) newErrors.lastname = 'Last name is required';
+    if (!formData.email) newErrors.email = 'Email is required';
+    if (!formData.phone) newErrors.phone = 'Phone number is required';
+    if (!formData.password) newErrors.password = 'Password is required';
+    if (!formData.confirmPassword) newErrors.confirmPassword = 'Confirm password is required';
+    if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
+    if (!formData.address) newErrors.address = 'Address is required';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (formData.password !== formData.confirmPassword) {
-      toast.error("Passwords do not match");
+    
+    if (!validateForm()) {
+      toast.error("Please fill out all fields correctly.");
       return;
     }
 
-    const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/users/signup`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "*/*",
-      },
-      body: JSON.stringify({
-        ...formData,
-        role: role
-      }),
-    });
+    try {
+      const response = await axios.post(
+        `${process.env.REACT_APP_BASE_URL}/api/v1/users/signup`,
+        {
+          ...formData,
+          role: role
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
 
-    const result = await response.json();
-    if (result.success) {
-      toast.success("Signup successful");
-      setTimeout(() => navigate('/login'), 2000);
-    } else {
-      toast.error("Signup failed: " + result.message);
+      if (response.data.success) {
+        toast.success("Signup successful! Please wait for admin approval.");
+        setTimeout(() => navigate('/login'), 2000);
+      } else {
+        toast.error(response.data.message || "Signup failed");
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error ||
+                          "Failed to create account. Please try again.";
+      
+      toast.error(errorMessage);
     }
   };
 
@@ -88,7 +116,12 @@ const SignupPage = () => {
                           onChange={handleChange}
                           className="form-control-lg"
                           required
+                          autoComplete="given-name"
+                          isInvalid={!!errors.firstname}
                         />
+                        <Form.Control.Feedback type="invalid">
+                          {errors.firstname}
+                        </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
                     <Col md={6}>
@@ -102,7 +135,12 @@ const SignupPage = () => {
                           onChange={handleChange}
                           className="form-control-lg"
                           required
+                          autoComplete="family-name"
+                          isInvalid={!!errors.lastname}
                         />
+                        <Form.Control.Feedback type="invalid">
+                          {errors.lastname}
+                        </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
                   </Row>
@@ -119,7 +157,12 @@ const SignupPage = () => {
                           onChange={handleChange}
                           className="form-control-lg"
                           required
+                          autoComplete="email"
+                          isInvalid={!!errors.email}
                         />
+                        <Form.Control.Feedback type="invalid">
+                          {errors.email}
+                        </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
                     <Col md={6}>
@@ -133,7 +176,12 @@ const SignupPage = () => {
                           onChange={handleChange}
                           className="form-control-lg"
                           required
+                          autoComplete="tel"
+                          isInvalid={!!errors.phone}
                         />
+                        <Form.Control.Feedback type="invalid">
+                          {errors.phone}
+                        </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
                   </Row>
@@ -150,7 +198,12 @@ const SignupPage = () => {
                           onChange={handleChange}
                           className="form-control-lg"
                           required
+                          autoComplete="new-password"
+                          isInvalid={!!errors.password}
                         />
+                        <Form.Control.Feedback type="invalid">
+                          {errors.password}
+                        </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
                     <Col md={6}>
@@ -164,7 +217,12 @@ const SignupPage = () => {
                           onChange={handleChange}
                           className="form-control-lg"
                           required
+                          autoComplete="new-password"
+                          isInvalid={!!errors.confirmPassword}
                         />
+                        <Form.Control.Feedback type="invalid">
+                          {errors.confirmPassword}
+                        </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
                   </Row>
@@ -178,6 +236,7 @@ const SignupPage = () => {
                           value={formData.gender}
                           onChange={handleChange}
                           className="form-control-lg"
+                          autoComplete="sex"
                         >
                           <option value="Male">Male</option>
                           <option value="Female">Female</option>
@@ -195,7 +254,12 @@ const SignupPage = () => {
                           onChange={handleChange}
                           className="form-control-lg"
                           required
+                          autoComplete="street-address"
+                          isInvalid={!!errors.address}
                         />
+                        <Form.Control.Feedback type="invalid">
+                          {errors.address}
+                        </Form.Control.Feedback>
                       </Form.Group>
                     </Col>
                   </Row>
@@ -269,4 +333,4 @@ const SignupPage = () => {
   );
 };
 
-export default SignupPage; 
+export default SignupPage;

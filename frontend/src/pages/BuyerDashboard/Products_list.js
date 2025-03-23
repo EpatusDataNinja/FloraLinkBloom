@@ -78,7 +78,7 @@ const ProductCarousel = ({ products = [], currentIndex = 0, onNext, onPrev, onVi
           <div className="seller-avatar">
             {seller.image ? (
               <img 
-                src={seller.image}
+                src={seller.image.startsWith('http') ? seller.image : `${process.env.REACT_APP_BASE_URL}${seller.image}`}
                 alt={seller.name}
                 className="rounded-circle"
                 style={{ 
@@ -89,7 +89,6 @@ const ProductCarousel = ({ products = [], currentIndex = 0, onNext, onPrev, onVi
                   backgroundColor: 'white'
                 }}
                 onError={(e) => {
-                  console.log('Image load error:', e);
                   e.target.src = 'https://via.placeholder.com/60?text=Seller';
                 }}
               />
@@ -145,7 +144,7 @@ const ProductCarousel = ({ products = [], currentIndex = 0, onNext, onPrev, onVi
               <div className="product-content">
                 <div className="product-image-container">
                   <img 
-                    src={`${process.env.REACT_APP_BASE_URL}${product.image}`}
+                    src={product.image.startsWith('http') ? product.image : `${process.env.REACT_APP_BASE_URL}${product.image}`}
                     alt={product.name}
                     onError={(e) => {
                       e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
@@ -155,12 +154,10 @@ const ProductCarousel = ({ products = [], currentIndex = 0, onNext, onPrev, onVi
 
                 <div className="product-info">
                   <h4 className="product-name">{product.name}</h4>
-                  <p className="product-price">${product.price}</p>
+                  <p className="product-price">${product.price?.toFixed(2)}</p>
                   <div className="product-meta">
                     <span className="stock">Stock: {product.quantity}</span>
-                    <span className="date">
-                      Added: {new Date(product.createdAt).toLocaleDateString()}
-                    </span>
+                    <span className="seller">Seller: {product.sellerName || `${product.firstname} ${product.lastname}`.trim()}</span>
                   </div>
                   <p className="product-description">{product.description}</p>
                 </div>
@@ -193,8 +190,6 @@ const ProductCarousel = ({ products = [], currentIndex = 0, onNext, onPrev, onVi
 };
 
 const SellerProductsModal = ({ seller, onClose, onOrderClick, onAddToCart }) => {
-  console.log('Modal seller data:', seller);
-
   return (
     <Modal show={true} onHide={onClose} size="xl">
       <Modal.Header closeButton>
@@ -245,11 +240,16 @@ const SellerProductsModal = ({ seller, onClose, onOrderClick, onAddToCart }) => 
           {seller.products.map((product) => (
             <div key={product.id} className="col-md-4">
               <Card className="h-100 border-0 shadow-sm product-card">
-                <Card.Img 
-                  variant="top" 
-                  src={`${process.env.REACT_APP_BASE_URL}${product.image}`}
-                  style={{ height: "200px", objectFit: "cover" }}
-                />
+                <div className="product-image-container">
+                  <Card.Img 
+                    variant="top" 
+                    src={`${process.env.REACT_APP_BASE_URL}${product.image}`}
+                    alt={product.name}
+                    onError={(e) => {
+                      e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
+                    }}
+                  />
+                </div>
                 <Card.Body>
                   <Card.Title>{product.name}</Card.Title>
                   <Card.Text>{product.description}</Card.Text>
@@ -734,7 +734,7 @@ const InStockProducts = () => {
           border-radius: 8px;
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
           overflow: hidden;
-          height: 600px; /* Increased from 400px to 600px */
+          height: 500px; /* Adjusted to match the new image height */
         }
 
         .product-counter-overlay {
@@ -779,28 +779,42 @@ const InStockProducts = () => {
         .product-image-container {
           position: relative;
           width: 100%;
-          height: 400px; /* Increased from 250px to 400px */
+          height: 200px;
+          overflow: hidden;
+          border-radius: 8px;
+          background-color: #f8f9fa;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .product-image-container img {
           width: 100%;
           height: 100%;
           object-fit: cover;
+          transition: transform 0.3s ease;
+        }
+
+        .product-image-container:hover img {
+          transform: scale(1.05);
         }
 
         .product-info {
-          padding: 20px; /* Increased from 10px */
+          padding: 15px;
+          background: #fff5f5;
+          border-top: 1px solid rgba(0, 0, 0, 0.05);
         }
 
         .product-name {
-          font-size: 1.4rem; /* Increased from 0.9rem */
-          margin: 0 0 10px 0;
+          font-size: 1rem;
+          margin: 0 0 8px 0;
           font-weight: 600;
+          color: #15803d;
         }
 
         .product-price {
-          font-size: 1.3rem; /* Increased from 0.9rem */
-          margin: 0 0 10px 0;
+          font-size: 1rem;
+          margin: 0 0 8px 0;
           color: #15803d;
           font-weight: 600;
         }
@@ -808,14 +822,21 @@ const InStockProducts = () => {
         .product-meta {
           display: flex;
           justify-content: space-between;
-          gap: 12px;
-          margin-bottom: 10px;
-          font-size: 1rem; /* Increased from 0.7rem */
+          gap: 8px;
+          margin-bottom: 8px;
+          font-size: 0.8rem;
+          color: #666;
+        }
+
+        .seller {
+          color: #15803d;
+          font-weight: 500;
         }
 
         .product-description {
-          font-size: 1rem; /* Increased from 0.7rem */
-          line-height: 1.5;
+          font-size: 0.85rem;
+          line-height: 1.4;
+          color: #444;
           -webkit-line-clamp: 3;
           overflow: hidden;
           display: -webkit-box;
@@ -824,7 +845,7 @@ const InStockProducts = () => {
 
         .carousel-controls {
           position: absolute;
-          top: 200px; /* Adjusted to center with new image height */
+          top: 150px; /* Adjusted to center with new image height */
           left: 0;
           right: 0;
           display: flex;

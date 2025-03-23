@@ -36,18 +36,29 @@ const Dashboard = () => {
           margin-left: 280px;
           padding: 2rem;
           transition: margin-left 0.3s ease;
+          overflow-x: hidden;
         }
 
         .dashboard-content {
-          max-width: 1200px;
+          max-width: 1400px;
           margin: 0 auto;
+          padding: 0 1rem;
+        }
+
+        @media (max-width: 1200px) {
+          .dashboard-content {
+            max-width: 100%;
+          }
         }
 
         @media (max-width: 768px) {
           .dashboard-main {
             margin-left: 0;
-            width: 100%;
             padding: 1rem;
+          }
+          
+          .dashboard-content {
+            padding: 0;
           }
         }
       `}</style>
@@ -55,4 +66,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard; 
+export default Dashboard;

@@ -1,34 +1,53 @@
-import dotenv from "dotenv";
-import { createServer } from 'http';
-import app from "./app.js";
-import setupSocket from './socket/socketSetup.js';
-import reportsRouter from './routers/reportsRouter.js';
+const dotenv = require("dotenv");
+const { createServer } = require('http');
+const app = require("./app");
+const setupSocket = require('./socket/socketSetup');
+const reportsRouter = require('./routers/reportsRouter');
+const db = require('./database/models');
+const initializeOrderEvents = require('./events/orderEvents');
 
 dotenv.config();
 const PORT = process.env.PORT || 5000;
 
-// Create HTTP server
-const server = createServer(app);
+// Initialize database and start server
+const startServer = async () => {
+  try {
+    // Initialize database and load models
+    await db.initializeDatabase();
 
-// Setup Socket.IO
-const io = setupSocket(server);
+    // Create HTTP server
+    const server = createServer(app);
 
-// Store io instance in app
-app.set('io', io);
+    // Setup Socket.IO
+    const io = setupSocket(server);
 
-// Add reports router
-app.use('/api/v1/reports', reportsRouter);
+    // Store instances in app
+    app.set('io', io);
+    app.set('db', db);
 
-// Start server
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+    // Add reports router
+    app.use('/api/v1/reports', reportsRouter);
+
+    // Initialize events after database and models are ready
+    initializeOrderEvents();
+    console.log('Order events initialized successfully');
+
+    // Start server
+    server.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Unable to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Start the server
+startServer();
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
   console.log('UNHANDLED REJECTION! 💥 Shutting down...');
   console.log(err.name, err.message);
-  server.close(() => {
-    process.exit(1);
-  });
+  process.exit(1);
 });

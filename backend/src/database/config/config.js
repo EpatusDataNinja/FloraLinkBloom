@@ -1,5 +1,5 @@
-import dotenv from "dotenv";
-dotenv.config();
+require('dotenv').config();
+
 const {
   DEV_DATABASE_NAME,
   DEV_DATABASE_USER,
@@ -21,6 +21,13 @@ module.exports = {
     host: DEV_DATABASE_HOST,
     port: DEV_DATABASE_PORT,
     dialect: "postgres",
+    logging: console.log,
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    }
   },
   production: {
     username: PRO_DATABASE_USER,
@@ -29,6 +36,13 @@ module.exports = {
     host: PRO_DATABASE_HOST,
     port: PRO_DATABASE_PORT,
     dialect: "postgres",
+    logging: false,
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    },
     dialectOptions: {
       ssl: {
         require: true,

@@ -3,6 +3,10 @@ import { Table, Button, Form, Modal, Spinner, Alert } from 'react-bootstrap';
 import axios from 'axios';
 import {useNavigate } from 'react-router-dom';
 import Title from "./TitleCard";
+import { toast } from 'react-toastify';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 const UsersTable = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,43 +18,121 @@ const UsersTable = () => {
   const [showModal, setShowModal] = useState(false);
   const token = localStorage.getItem('token');
    const navigate = useNavigate();
+  const [actionLoading, setActionLoading] = useState(null);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    const loadUsers = async () => {
+      try {
+        setLoading(true);
+        await fetchUsers();
+      } catch (error) {
+        console.error('Error loading users:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadUsers();
+  }, [token]);
 
   const fetchUsers = async () => {
     try {
       const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/api/v1/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setUsers(response.data.users);
+      if (response.data.success) {
+        setUsers(response.data.users);
+        setError(null);
+      } else {
+        setError(response.data.message || 'Failed to fetch users');
+      }
     } catch (error) {
-      setError('Failed to fetch users');
+      console.error('Fetch users error:', error);
+      setError(error.response?.data?.message || 'Failed to fetch users');
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+      }
+    }
+  };
+
+  const handleActivate = async (id, e) => {
+    e.stopPropagation();
+    setActionLoading(id);
+    try {
+      const response = await axios.put(
+        `${process.env.REACT_APP_BASE_URL}/api/v1/users/activate/${id}`,
+        {},
+        { 
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (response.data.success) {
+        toast.success(response.data.message || 'User activated successfully');
+        setUsers(prevUsers => 
+          prevUsers.map(user => 
+            user.id === id ? { ...user, ...response.data.user } : user
+          )
+        );
+      } else {
+        throw new Error(response.data.message || 'Failed to activate user');
+      }
+    } catch (error) {
+      console.error('Activation error:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to activate user';
+      toast.error(errorMessage);
+      
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+      }
     } finally {
-      setLoading(false);
+      setActionLoading(null);
     }
   };
 
-  const handleActivate = async (id) => {
+  const handleDeactivate = async (id, e) => {
+    e.stopPropagation();
+    setActionLoading(id);
     try {
-      await axios.put(`${process.env.REACT_APP_BASE_URL}/api/v1/users/activate/${id}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchUsers();
+      const response = await axios.put(
+        `${process.env.REACT_APP_BASE_URL}/api/v1/users/deactivate/${id}`,
+        {},
+        { 
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (response.data.success) {
+        toast.success(response.data.message || 'User deactivated successfully');
+        setUsers(prevUsers => 
+          prevUsers.map(user => 
+            user.id === id ? { ...user, ...response.data.user } : user
+          )
+        );
+      } else {
+        throw new Error(response.data.message || 'Failed to deactivate user');
+      }
     } catch (error) {
-      setError('Failed to activate user');
-    }
-  };
-
-  const handleDeactivate = async (id) => {
-    try {
-      await axios.put(`${process.env.REACT_APP_BASE_URL}/api/v1/users/deactivate/${id}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchUsers();
-    } catch (error) {
-      setError('Failed to deactivate user');
+      console.error('Deactivation error:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to deactivate user';
+      toast.error(errorMessage);
+      
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+      }
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -83,7 +165,8 @@ const UsersTable = () => {
 
   return (
     <div className="container mt-4">
-       <Title title={'List of users'}/>
+      <ToastContainer />
+      <Title title={'List of users'}/>
       {error && <Alert variant="danger">{error}</Alert>}
       <Form.Control
         type="text"
@@ -111,15 +194,37 @@ const UsersTable = () => {
               <tr key={user.id} style={{ cursor: 'pointer' }}
               onClick={() => handleShowModal(user)}>
                 <td>{user.id}</td>
-                <td >{user.firstname} {user.lastname}</td>
+                <td>{user.firstname} {user.lastname}</td>
                 <td>{user.email}</td>
                 <td>{user.role}</td>
                 <td className={user.status === 'active' ? 'text-success' : 'text-danger'}>{user.status}</td>
                 <td>
                   {user.status === 'inactive' ? (
-                    <Button variant="success" size="sm" onClick={() => handleActivate(user.id)}>Activate</Button>
+                    <Button 
+                      variant="success" 
+                      size="sm" 
+                      onClick={(e) => handleActivate(user.id, e)}
+                      disabled={actionLoading === user.id}
+                    >
+                      {actionLoading === user.id ? (
+                        <Spinner animation="border" size="sm" />
+                      ) : (
+                        'Activate'
+                      )}
+                    </Button>
                   ) : (
-                    <Button variant="danger" size="sm" onClick={() => handleDeactivate(user.id)}>Deactivate</Button>
+                    <Button 
+                      variant="danger" 
+                      size="sm" 
+                      onClick={(e) => handleDeactivate(user.id, e)}
+                      disabled={actionLoading === user.id}
+                    >
+                      {actionLoading === user.id ? (
+                        <Spinner animation="border" size="sm" />
+                      ) : (
+                        'Deactivate'
+                      )}
+                    </Button>
                   )}
                 </td>
               </tr>

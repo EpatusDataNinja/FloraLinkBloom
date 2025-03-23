@@ -192,22 +192,23 @@ const SellerProductsModal = ({ seller, onClose, onAddToCart, showGuestCartModal 
                     </Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
-                    <div className="row g-4">
+                    <div className="row g-5 justify-content-center">
                         {seller.products?.map((product) => (
-                            <div key={product.id} className="col-md-4">
+                            <div key={product.id} className="col-lg-4 col-md-6 col-sm-6 mb-4">
                                 {isAuthenticated ? (
-                                    <Card className="h-100 border-0 shadow-sm product-card">
-                                        <Card.Img 
-                                            variant="top" 
-                                            src={product.image.startsWith('http') ? product.image : `${process.env.REACT_APP_BASE_URL}${product.image}`}
-                                            style={{ height: "200px", objectFit: "cover" }}
-                                            onError={(e) => {
-                                                e.target.src = 'https://via.placeholder.com/200x200?text=No+Image';
-                                            }}
-                                        />
+                                    <Card className="modal-product-card">
+                                        <div className="modal-product-image">
+                                            <Card.Img 
+                                                variant="top" 
+                                                src={product.image.startsWith('http') ? product.image : `${process.env.REACT_APP_BASE_URL}${product.image}`}
+                                                onError={(e) => {
+                                                    e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
+                                                }}
+                                            />
+                                        </div>
                                         <Card.Body>
-                                            <Card.Title>{product.name}</Card.Title>
-                                            <Card.Text>{product.description}</Card.Text>
+                                            <Card.Title className="product-title">{product.name}</Card.Title>
+                                            <Card.Text className="product-description">{product.description}</Card.Text>
                                             <Card.Text className="text-success fw-bold">${product.price?.toFixed(2)}</Card.Text>
                                             <Card.Text>Stock: {product.quantity}</Card.Text>
                                             <div className="d-flex gap-2">
@@ -215,7 +216,7 @@ const SellerProductsModal = ({ seller, onClose, onAddToCart, showGuestCartModal 
                                                     variant="primary" 
                                                     className="flex-grow-1"
                                                     onClick={(e) => {
-                                                        e.stopPropagation(); // Prevent modal close
+                                                        e.stopPropagation();
                                                         handleOrderClick(product);
                                                     }}
                                                 >
@@ -224,7 +225,7 @@ const SellerProductsModal = ({ seller, onClose, onAddToCart, showGuestCartModal 
                                                 <Button 
                                                     variant="success"
                                                     onClick={(e) => {
-                                                        e.stopPropagation(); // Prevent modal close
+                                                        e.stopPropagation();
                                                         handleAddToCart(product);
                                                     }}
                                                     disabled={product.quantity <= 0}
@@ -235,24 +236,25 @@ const SellerProductsModal = ({ seller, onClose, onAddToCart, showGuestCartModal 
                                         </Card.Body>
                                     </Card>
                                 ) : (
-                                    <Card className="h-100 border-0 shadow-sm product-card">
-                                        <Card.Img 
-                                            variant="top" 
-                                            src={product.image.startsWith('http') ? product.image : `${process.env.REACT_APP_BASE_URL}${product.image}`}
-                                            style={{ height: "200px", objectFit: "cover" }}
-                                            onError={(e) => {
-                                                e.target.src = 'https://via.placeholder.com/200x200?text=No+Image';
-                                            }}
-                                        />
+                                    <Card className="modal-product-card">
+                                        <div className="modal-product-image">
+                                            <Card.Img 
+                                                variant="top" 
+                                                src={product.image.startsWith('http') ? product.image : `${process.env.REACT_APP_BASE_URL}${product.image}`}
+                                                onError={(e) => {
+                                                    e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
+                                                }}
+                                            />
+                                        </div>
                                         <Card.Body>
-                                            <Card.Title>{product.name}</Card.Title>
-                                            <Card.Text>{product.description}</Card.Text>
+                                            <Card.Title className="product-title">{product.name}</Card.Title>
+                                            <Card.Text className="product-description">{product.description}</Card.Text>
                                             <Card.Text className="text-success fw-bold">${product.price?.toFixed(2)}</Card.Text>
                                             <Card.Text>Stock: {product.quantity}</Card.Text>
                                             <Button 
                                                 variant="success"
                                                 onClick={(e) => {
-                                                    e.stopPropagation(); // Prevent modal close
+                                                    e.stopPropagation();
                                                     handleAddToCart(product);
                                                 }}
                                                 disabled={product.quantity <= 0}
@@ -918,6 +920,70 @@ const SearchResults = () => {
                         bottom: -25px;
                         font-size: 11px;
                     }
+                }
+
+                .modal-product-card {
+                    height: 100%;
+                    max-width: 340px;
+                    margin: 0 auto;
+                    background-color: #f0f7f0;
+                    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    border: none;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+
+                .modal-product-card:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 4px 12px rgba(21, 128, 61, 0.15);
+                }
+
+                .modal-product-image {
+                    position: relative;
+                    width: 100%;
+                    height: 200px;
+                    overflow: hidden;
+                    background-color: #f8f9fa;
+                }
+
+                .modal-product-image img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    transition: transform 0.3s ease;
+                }
+
+                .modal-product-card:hover .modal-product-image img {
+                    transform: scale(1.05);
+                }
+
+                .product-title {
+                    font-size: 1rem;
+                    margin-bottom: 0.5rem;
+                    color: #15803d;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                }
+
+                .product-description {
+                    font-size: 0.9rem;
+                    color: #666;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 3;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                    margin-bottom: 0.5rem;
+                }
+
+                .row.g-5 {
+                    --bs-gutter-x: 3rem;
+                    --bs-gutter-y: 3rem;
+                    margin-right: calc(var(--bs-gutter-x) * -.5);
+                    margin-left: calc(var(--bs-gutter-x) * -.5);
+                    padding: 1rem;
                 }
             `}</style>
         </div>

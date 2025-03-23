@@ -215,8 +215,7 @@ export const activateProductsController = async (req, res) => {
     });
 
     // Check if the user is an admin
-    let role = req.user.role;
-    if (role !== "admin") {
+    if (req.user.role !== "admin") {
       return res.status(403).json({
         success: false,
         message: "You are not allowed to activate products",
@@ -225,20 +224,15 @@ export const activateProductsController = async (req, res) => {
 
     // Fetch product details
     const data = await getOneProductsWithDetails(id);
-    console.log('Product details:', data);
-
     if (!data) {
       return res.status(404).json({
         success: false,
-        message: "Product details not found",
-        data: [],
+        message: "Product not found",
       });
     }
 
     // Fetch the user associated with the product
     const User1 = await Users.findOne({ where: { id: data.userID } });
-    console.log('Product owner details:', User1);
-
     if (!User1) {
       return res.status(404).json({
         success: false,
@@ -247,52 +241,45 @@ export const activateProductsController = async (req, res) => {
     }
 
     try {
-      // Send email notification
-      await new Email(User1, {
-        title: "Product Activation Notice",
-        message: `Your product ${data.name} has been activated successfully! Now it status is In Stock!`
-      }).sendNotification();
-    } catch (emailError) {
-      console.error('Email notification error:', emailError);
-      // Continue even if email fails
-    }
+      // Update product status
+      const updatedProduct = await status_change(id, "In Stock");
 
-    try {
-      // Create in-app notification
-      await Notification.create({
-        userID: User1.id,
-        title: `Product Activation!`,
-        message: `Your product ${data.name} has been activated successfully and is now "In Stock". You can check it in the system.`,
-        type: "activation",
+      // Send notifications
+      try {
+        await new Email(User1, {
+          title: "Product Activation Notice",
+          message: `Your product ${data.name} has been activated and is now in stock!`
+        }).sendNotification();
+
+        await Notification.create({
+          userID: User1.id,
+          title: "Product Activated",
+          message: `Your product ${data.name} has been activated and is now in stock.`,
+          type: "activation",
+        });
+      } catch (notifError) {
+        console.error('Notification error:', notifError);
+        // Continue even if notifications fail
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Product activated successfully",
+        data: updatedProduct
       });
-    } catch (notifError) {
-      console.error('Notification creation error:', notifError);
-      // Continue even if notification fails
-    }
-
-    // Update product status
-    const updatedProduct = await status_change(id, "In Stock");
-    console.log('Updated product:', updatedProduct);
-
-    if (!updatedProduct) {
-      return res.status(404).json({
+    } catch (statusError) {
+      // Handle invalid status transition
+      return res.status(400).json({
         success: false,
-        message: "Product status update failed",
+        message: statusError.message,
       });
     }
-
-    return res.status(200).json({
-      success: true,
-      message: "Product activated successfully and status updated to 'In Stock'",
-      data: updatedProduct
-    });
-
   } catch (error) {
     console.error('Error in activateProductsController:', error);
     return res.status(500).json({
       success: false,
       message: "Something went wrong",
-      error: error.message || error,
+      error: error.message,
     });
   }
 };
@@ -301,16 +288,20 @@ export const activateProductsController = async (req, res) => {
 export const deactivateProductsController = async (req, res) => {
   try {
     const { id } = req.params;
-    const userID = req.user.id; // Get logged-in user's ID
+    const userID = req.user.id;
 
-
+    // Debug logging
+    console.log('Deactivating product:', {
+      productId: id,
+      userId: userID,
+      userRole: req.user.role
+    });
 
     // Check if the user is an admin
-    let role = req.user.role;
-    if (role !== "admin") {
-      return res.status(400).json({
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
         success: false,
-        message: "You are not allowed to diactivate products",
+        message: "You are not allowed to reject products",
       });
     }
 
@@ -319,8 +310,7 @@ export const deactivateProductsController = async (req, res) => {
     if (!data) {
       return res.status(404).json({
         success: false,
-        message: "Product details not found",
-        data: [],
+        message: "Product not found",
       });
     }
 
@@ -333,34 +323,46 @@ export const deactivateProductsController = async (req, res) => {
       });
     }
 
-    await new Email(User1, { message: ` ! Your product ${data.name}  has been rejected  !!`}).sendNotification();
+    try {
+      // Update product status
+      const updatedProduct = await status_change(id, "rejected");
 
-    // Send a notification to the user
-    await Notification.create({
-      userID: User1.id,
-      title: `Product rejection!`,
-      message: `Your product ${data.name} has been rejected`,
-      type: "rejection",
-    });
+      // Send notifications
+      try {
+        await new Email(User1, {
+          title: "Product Rejection Notice",
+          message: `Your product ${data.name} has been rejected. Please review and update the product details.`
+        }).sendNotification();
 
-    let status = "rejected";
-    const product = await status_change(req.params.id, status);
-    if (!product) {
-      return res.status(404).json({
+        await Notification.create({
+          userID: User1.id,
+          title: "Product Rejected",
+          message: `Your product ${data.name} has been rejected. Please review and update the product details.`,
+          type: "rejection",
+        });
+      } catch (notifError) {
+        console.error('Notification error:', notifError);
+        // Continue even if notifications fail
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Product rejected successfully",
+        data: updatedProduct
+      });
+    } catch (statusError) {
+      // Handle invalid status transition
+      return res.status(400).json({
         success: false,
-        message: "product not found",
+        message: statusError.message,
       });
     }
-
-    return res.status(200).json({
-      success: true,
-      message: "product deactivated successfully",
-      product,
-    });
   } catch (error) {
+    console.error('Error in deactivateProductsController:', error);
     return res.status(500).json({
+      success: false,
       message: "Something went wrong",
-      error,
+      error: error.message,
     });
   }
 };
