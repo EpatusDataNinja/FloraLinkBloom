@@ -37,6 +37,8 @@ import {
 
 import fs from 'fs';
 import { Op } from "sequelize";
+import { Sequelize } from 'sequelize';
+const sequelize = db.sequelize;
 
 export const addProductsController = async (req, res) => {
   try {
@@ -906,4 +908,207 @@ export const searchProductsController = async (req, res) => {
             error: error.message
         });
     }
+};
+
+export const getTrendingProducts = async (req, res) => {
+  try {
+    const trendingProducts = await Products.findAll({
+      attributes: [
+        'id',
+        'name',
+        'description',
+        'price',
+        'quantity',
+        'image',
+        'status',
+        'categoryID',
+        'userID',
+        'createdAt',
+        [sequelize.fn('COUNT', sequelize.col('orders.id')), 'orderCount']
+      ],
+      include: [
+        {
+          model: Orders,
+          as: 'orders',
+          attributes: []
+        },
+        {
+          model: Users,
+          as: 'user',
+          attributes: ['id', 'firstname', 'lastname', 'email', 'image', 'status'],
+          where: { status: 'active' }
+        }
+      ],
+      where: { 
+        status: 'In Stock'
+      },
+      group: [
+        'Products.id',
+        'user.id',
+        'user.firstname',
+        'user.lastname',
+        'user.email',
+        'user.image',
+        'user.status'
+      ],
+      order: [[sequelize.fn('COUNT', sequelize.col('orders.id')), 'DESC']],
+      limit: 6
+    });
+
+    // Transform the response to include user data
+    const transformedProducts = trendingProducts.map(product => ({
+      ...product.toJSON(),
+      user: {
+        id: product.user.id,
+        firstname: product.user.firstname,
+        lastname: product.user.lastname,
+        email: product.user.email,
+        image: product.user.image,
+        status: product.user.status
+      }
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: transformedProducts
+    });
+  } catch (error) {
+    console.error('Error fetching trending products:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch trending products'
+    });
+  }
+};
+
+export const getSeasonalProducts = async (req, res) => {
+  try {
+    const { season } = req.params;
+    
+    // Get the current month
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth();
+
+    // Define seasons and their months (matching frontend definition)
+    const RWANDA_SEASONS = {
+      'Long Rainy': [2, 3, 4],
+      'Long Dry': [5, 6, 7],
+      'Short Rainy': [8, 9, 10],
+      'Short Dry': [11, 0, 1]
+    };
+
+    const seasonMonths = RWANDA_SEASONS[season];
+    if (!seasonMonths) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid season specified'
+      });
+    }
+
+    const products = await Products.findAll({
+      where: {
+        status: 'In Stock',
+        createdAt: {
+          [Op.and]: [
+            sequelize.literal(`EXTRACT(MONTH FROM "Products"."createdAt") IN (${seasonMonths.join(',')})`)
+          ]
+        }
+      },
+      include: [{
+        model: Users,
+        as: 'user',
+        attributes: ['id', 'firstname', 'lastname', 'email', 'image', 'status'],
+        where: { status: 'active' }
+      }],
+      order: [['createdAt', 'DESC']]
+    });
+
+    // Transform the response to include user data
+    const transformedProducts = products.map(product => {
+      const productData = product.toJSON();
+      return {
+        ...productData,
+        user: {
+          id: product.user.id,
+          firstname: product.user.firstname,
+          lastname: product.user.lastname,
+          email: product.user.email,
+          image: product.user.image,
+          status: product.user.status
+        }
+      };
+    });
+
+    console.log(`Found ${transformedProducts.length} products for season ${season}`);
+
+    return res.status(200).json({
+      success: true,
+      data: transformedProducts
+    });
+  } catch (error) {
+    console.error('Error fetching seasonal products:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch seasonal products'
+    });
+  }
+};
+
+export const getFeaturedProducts = async (req, res) => {
+  try {
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+    const products = await Products.findAll({
+      include: [
+        {
+          model: Orders,
+          as: 'orders',
+          required: false,
+          where: {
+            createdAt: {
+              [Op.gte]: sixtyDaysAgo
+            }
+          }
+        },
+        {
+          model: Users,
+          as: 'user',
+          attributes: ['id', 'firstname', 'lastname', 'email', 'image', 'status'],
+          where: { status: 'active' }
+        }
+      ],
+      where: {
+        status: 'In Stock',
+        '$orders.id$': null // Only get products with no orders in last 60 days
+      }
+    });
+
+    // Transform the response to ensure user data is properly structured
+    const transformedProducts = products.map(product => {
+      const productData = product.toJSON();
+      return {
+        ...productData,
+        user: {
+          id: productData.user.id,
+          firstname: productData.user.firstname,
+          lastname: productData.user.lastname,
+          email: productData.user.email,
+          image: productData.user.image,
+          status: productData.user.status
+        }
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: transformedProducts
+    });
+  } catch (error) {
+    console.error('Error fetching featured products:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch featured products'
+    });
+  }
 };

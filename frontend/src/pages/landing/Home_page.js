@@ -71,81 +71,139 @@ const HomePage = () => {
     return RWANDA_SEASONS[season]?.icon || <FaLeaf className="text-success" />;
   };
 
-  // Simplified seasonal filtering
+  // Update the filterProductsBySeason function to be more robust
   const filterProductsBySeason = (products, season) => {
     const seasonMonths = RWANDA_SEASONS[season].months;
     return products.filter(product => {
-      const productMonth = new Date(product.createdAt).getMonth();
-      return seasonMonths.includes(productMonth);
+      if (!product.createdAt) return false;
+      
+      try {
+        const productDate = new Date(product.createdAt);
+        const productMonth = productDate.getMonth();
+        const isInSeason = seasonMonths.includes(productMonth);
+        console.log(`Product ${product.id}: Month ${productMonth}, Season ${season}, IsInSeason: ${isInSeason}`);
+        return isInSeason;
+      } catch (error) {
+        console.error(`Error processing date for product ${product.id}:`, error);
+        return false;
+      }
     });
   };
 
-  // Add this useEffect back for initial trending and available products
+  // Update the useEffect for trending and featured products
   useEffect(() => {
-    const fetchInitialData = async () => {
+    const fetchOtherProducts = async () => {
       try {
-        setLoading({ trending: true, seasonal: true, available: true });
-        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/api/v1/product/approved`);
-        
-        if (response.data.success) {
-          const products = response.data.data;
-          const currentSeason = getCurrentSeason();
+        setLoading(prev => ({
+          ...prev,
+          trending: true,
+          available: true
+        }));
 
-          // Trending Products
-          const trendingProducts = products
-            .filter(product => product.quantity > 0)
-            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-            .slice(0, 3)
-            .map(product => ({
-              ...product,
-              season: currentSeason
+        // Fetch trending products with better error handling
+        try {
+          console.log('Fetching trending products...');
+        const trendingResponse = await axios.get(
+          `${process.env.REACT_APP_BASE_URL}/api/v1/product/trending`
+          );
+          console.log('Raw trending response:', trendingResponse);
+          
+          if (trendingResponse.data.success) {
+            const trendingProducts = trendingResponse.data.data;
+            console.log('Processed trending products:', trendingProducts);
+            
+            setData(prev => ({
+              ...prev,
+              trending: trendingProducts
             }));
-
-          // Available Products
-          const availableProducts = products
-            .filter(product => product.quantity > 0)
-            .slice(0, 3)
-            .map(product => ({
-              ...product,
-              season: currentSeason
+          } else {
+            console.warn('Trending response was not successful:', trendingResponse.data);
+            setData(prev => ({
+              ...prev,
+              trending: []
             }));
-
-          setData(prevData => ({
-            ...prevData,
-            trending: trendingProducts,
-            available: availableProducts
+          }
+        } catch (trendingError) {
+          console.error("Error fetching trending products:", trendingError);
+          console.error("Error details:", {
+            message: trendingError.message,
+            response: trendingError.response?.data
+          });
+          
+          // Set empty trending products but don't show error toast
+          setData(prev => ({
+            ...prev,
+            trending: []
           }));
         }
+
+        // Fetch featured products
+        try {
+          console.log('Fetching featured products...');
+          const featuredResponse = await axios.get(
+            `${process.env.REACT_APP_BASE_URL}/api/v1/product/featured`
+          );
+          console.log('Featured Response:', featuredResponse.data);
+
+          if (featuredResponse.data.success) {
+            const featuredProducts = featuredResponse.data.data;
+            console.log('Processed featured products:', featuredProducts);
+            
+            setData(prev => ({
+              ...prev,
+              available: featuredProducts
+            }));
+          } else {
+            console.warn('Featured response was not successful:', featuredResponse.data);
+            setData(prev => ({
+              ...prev,
+              available: []
+            }));
+          }
+        } catch (featuredError) {
+          console.error("Error fetching featured products:", featuredError);
+          toast.error("Failed to load featured products");
+          setData(prev => ({
+            ...prev,
+            available: []
+          }));
+        }
+
       } catch (error) {
-        console.error("Error fetching initial data:", error);
-        toast.error("Failed to load products");
+        console.error("General error in fetchOtherProducts:", error);
       } finally {
-        setLoading({ trending: false, seasonal: false, available: false });
+        setLoading(prev => ({
+          ...prev,
+          trending: false,
+          available: false
+        }));
       }
     };
 
-    fetchInitialData();
-  }, []); // Run only on component mount
+    fetchOtherProducts();
+  }, []);
 
-  // Fetch seasonal data
+  // Update the seasonal products useEffect
   useEffect(() => {
-    const fetchHomeData = async () => {
+    const fetchSeasonalData = async () => {
       try {
-        setLoading(prev => ({ ...prev, seasonal: true }));
-        const response = await axios.get(`${process.env.REACT_APP_BASE_URL}/api/v1/product/approved`);
+        setLoading(prev => ({
+          ...prev,
+          seasonal: true
+        }));
         
-        if (response.data.success) {
-          const products = response.data.data;
-          const seasonalProducts = filterProductsBySeason(products, selectedSeason)
-            .filter(product => product.quantity > 0)
-            .slice(0, 4)
-            .map(product => ({
-              ...product,
-              season: selectedSeason
-            }));
+        // Fetch seasonal products directly from the backend
+        const response = await axios.get(
+          `${process.env.REACT_APP_BASE_URL}/api/v1/product/seasonal/${selectedSeason}`
+        );
+        console.log('Seasonal products response:', response.data);
 
-          setData(prevData => ({
-            ...prevData,
+        if (response.data.success) {
+          const seasonalProducts = response.data.data;
+          console.log('Seasonal products with sellers:', seasonalProducts);
+
+          setData(prev => ({
+            ...prev,
             seasonal: seasonalProducts
           }));
         }
@@ -153,26 +211,35 @@ const HomePage = () => {
         console.error("Error fetching seasonal data:", error);
         toast.error("Failed to load seasonal products");
       } finally {
-        setLoading(prev => ({ ...prev, seasonal: false }));
+        setLoading(prev => ({
+          ...prev,
+          seasonal: false
+        }));
       }
     };
 
-    fetchHomeData();
+    fetchSeasonalData();
+  }, [selectedSeason]);
+
+  // Add a useEffect to log when season changes
+  useEffect(() => {
+    console.log('Selected season changed to:', selectedSeason);
+    console.log('Season months:', RWANDA_SEASONS[selectedSeason].months);
   }, [selectedSeason]);
 
   // 1. Update section headings and descriptions
   const sections = {
     trending: {
       title: "Trending Products",
-      subtitle: "Our most popular floriculture items"
+      subtitle: "Our most popular and frequently ordered items"
     },
     seasonal: {
       title: "Seasonal Selections",
-      subtitle: "Products best suited for the current season"
+      subtitle: `Best floriculture products for ${RWANDA_SEASONS[selectedSeason]?.label}`
     },
     available: {
       title: "Featured Collection",
-      subtitle: "Explore our diverse range of floriculture products"
+      subtitle: "Discover our hidden gems and unique offerings"
     }
   };
 
@@ -180,7 +247,12 @@ const HomePage = () => {
   const SeasonalNav = () => (
     <div className="seasonal-nav">
       <div className="d-flex flex-column mb-4">
-        <h2 className="text-success fw-bold mb-2">{sections.seasonal.title}</h2>
+        <div className="d-flex align-items-center gap-3 mb-2">
+          <h2 className="text-success fw-bold mb-0">{sections.seasonal.title}</h2>
+          <span className="section-badge">
+            {getSeasonIcon(selectedSeason)} {selectedSeason}
+          </span>
+        </div>
         <p className="text-muted">{sections.seasonal.subtitle}</p>
       </div>
       <div className="season-buttons-container">
@@ -191,8 +263,13 @@ const HomePage = () => {
             className="season-button"
             onClick={() => setSelectedSeason(season)}
           >
-            <span className="season-icon">{data.icon}</span>
-            <span className="season-label">{data.label}</span>
+            <div className="season-content">
+              <span className="season-icon">{data.icon}</span>
+              <div className="season-text">
+                <span className="season-name">{season}</span>
+                <span className="season-period">{data.label.split('(')[1].replace(')', '')}</span>
+              </div>
+            </div>
           </Button>
         ))}
       </div>
@@ -223,7 +300,7 @@ const HomePage = () => {
       id: 4, 
       name: 'Soil & Fertilizer', 
       description: 'Optimal soil and nutrient solutions for flowers.',
-      icon: '��'
+      icon: ''
     },
   ];
 
@@ -234,6 +311,15 @@ const HomePage = () => {
       <p>Loading {section}...</p>
     </div>
   );
+
+  // Update the renderSellerInfo function to handle the user object structure
+  const renderSellerInfo = (product) => {
+    if (!product.user) {
+      console.log('Missing user data for product:', product.id);
+      return 'Seller information unavailable';
+    }
+    return `${product.user.firstname} ${product.user.lastname}`;
+  };
 
   return (
     <div className="min-h-screen">
@@ -252,107 +338,154 @@ const HomePage = () => {
             {/* Trending Section */}
             <section className="bg-light p-4 rounded mb-4">
               <div className="d-flex flex-column mb-4">
-                <h2 className="text-success fw-bold mb-2">{sections.trending.title}</h2>
+                <div className="d-flex align-items-center gap-3 mb-2">
+                  <h2 className="text-success fw-bold mb-0">{sections.trending.title}</h2>
+                  <span className="section-badge">
+                    {getSeasonIcon(getCurrentSeason())} Trending
+                  </span>
+                </div>
                 <p className="text-muted">{sections.trending.subtitle}</p>
               </div>
-              {loading.trending ? renderLoading("trending products") : (
+              {loading.trending ? (
+                renderLoading("trending products")
+              ) : data.trending.length > 0 ? (
               <div className="row g-4">
                   {data.trending.map((product) => (
                   <div key={product.id} className="col-md-4">
                     <Card className="h-100 border-0 shadow-sm hover-card">
                       <div className="card-img-container">
                           <img 
-                            src={product.image.startsWith('http') 
+                            src={product.image?.startsWith('http') 
                               ? product.image 
                               : `${process.env.REACT_APP_BASE_URL}${product.image}`
                             }
-                            alt={product.name}
+                            alt={product.name || 'Product Image'}
                             className="card-img-top product-img"
                             onError={(e) => {
                               e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
                             }}
                           />
-                          <div className="seasonal-overlay">
-                            <span className="season-badge">
-                              {getSeasonIcon(product.season)} {RWANDA_SEASONS[product.season]?.label}
-                            </span>
-                        </div>
                         </div>
                         <Card.Body className="text-center d-flex flex-column justify-content-between">
                           <div>
-                            <Card.Title className="text-success fw-bold mb-2">{product.name}</Card.Title>
-                            <Card.Text className="text-muted mb-3">{RWANDA_SEASONS[product.season]?.description}</Card.Text>
-                            <p className="price mb-2">RWF {product.price?.toLocaleString()}</p>
-                            <p className="stock mb-3">Stock: {product.quantity} units</p>
-                      </div>
+                            <Card.Title className="product-name mb-3">{product.name}</Card.Title>
+                            <Card.Text className="product-description mb-4">
+                              {product.description || RWANDA_SEASONS[product.season]?.description}
+                            </Card.Text>
+                            <div className="info-container mt-auto">
+                              <div className="info-item">
+                                <span className="info-label">Price</span>
+                                <span className="info-value price">RWF {product.price?.toLocaleString()}</span>
+                              </div>
+                              <div className="info-item">
+                                <span className="info-label">Stock</span>
+                                <span className="info-value">
+                                  {product.quantity} units
+                                </span>
+                              </div>
+                              <div className="info-item">
+                                <span className="info-label">Seller</span>
+                                <span className="info-value seller">
+                                  {product.user ? 
+                                    `${product.user.firstname} ${product.user.lastname}` : 
+                                    'Seller information unavailable'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
                           <Button 
-                            variant="outline-success" 
-                            className="rounded-pill px-4"
+                            variant="success" 
+                            className="rounded-pill px-4 mt-4"
                             onClick={() => navigate(`/product/${product.id}`)}
                           >
-                          View Details
-                        </Button>
-                      </Card.Body>
+                            View Details
+                          </Button>
+                        </Card.Body>
                     </Card>
                   </div>
                 ))}
               </div>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-muted">No trending products available at the moment.</p>
+                </div>
               )}
             </section>
 
             {/* Seasonal Section */}
             <section className="bg-light p-4 rounded mb-4">
               <SeasonalNav />
-              {loading.seasonal ? renderLoading("seasonal products") : (
-              <div className="row g-4">
-                  {data.seasonal.map((product) => (
-                    <div key={product.id} className="col-md-3">
-                    <Card className="h-100 border-0 shadow-sm hover-card">
-                      <div className="seasonal-img-container">
+              <div className="seasonal-products-container">
+                {loading.seasonal ? renderLoading("seasonal products") : (
+                <div className="row g-4">
+                    {data.seasonal.map((product) => (
+                      <div key={product.id} className="col-md-3">
+                      <Card className="h-100 border-0 shadow-sm hover-card">
+                        <div className="card-img-container">
                           <img 
-                            src={product.image.startsWith('http') 
+                            src={product.image?.startsWith('http') 
                               ? product.image 
                               : `${process.env.REACT_APP_BASE_URL}${product.image}`
                             }
-                            alt={product.name}
+                            alt={product.name || 'Product Image'}
                             className="card-img-top product-img"
                             onError={(e) => {
                               e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
                             }}
                           />
-                          <div className="seasonal-badge-overlay">
-                            <span className="seasonal-period-badge">
-                              {getSeasonIcon(product.season)} 
-                              <span>{RWANDA_SEASONS[product.season]?.label}</span>
-                            </span>
-                        </div>
                         </div>
                         <Card.Body className="text-center d-flex flex-column justify-content-between">
                           <div>
-                            <Card.Title className="text-success fw-bold mb-2">{product.name}</Card.Title>
-                            <Card.Text className="text-muted mb-3">{RWANDA_SEASONS[product.season]?.description}</Card.Text>
-                            <p className="price mb-2">RWF {product.price?.toLocaleString()}</p>
-                            <p className="stock mb-3">Stock: {product.quantity} units</p>
-                      </div>
+                            <Card.Title className="product-name mb-3">{product.name}</Card.Title>
+                            <Card.Text className="product-description mb-4">
+                              {product.description || RWANDA_SEASONS[selectedSeason]?.description}
+                            </Card.Text>
+                            <div className="info-container mt-auto">
+                              <div className="info-item">
+                                <span className="info-label">Price</span>
+                                <span className="info-value price">RWF {product.price?.toLocaleString()}</span>
+                              </div>
+                              <div className="info-item">
+                                <span className="info-label">Stock</span>
+                                <span className="info-value">
+                                  {product.quantity} units
+                                </span>
+                              </div>
+                              <div className="info-item">
+                                <span className="info-label">Seller</span>
+                                <span className="info-value seller">
+                                  {product.user ? 
+                                    `${product.user.firstname} ${product.user.lastname}` : 
+                                    'Seller information unavailable'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
                           <Button 
                             variant="success" 
-                            className="rounded-pill px-4"
+                            className="rounded-pill px-4 mt-4"
                             onClick={() => navigate(`/product/${product.id}`)}
                           >
                             View Details
-                        </Button>
-                      </Card.Body>
-                    </Card>
-                  </div>
-                ))}
+                          </Button>
+                        </Card.Body>
+                      </Card>
+                    </div>
+                  ))}
+                </div>
+                )}
               </div>
-              )}
             </section>
 
             {/* Available Products Section */}
             <section className="bg-light p-4 rounded mb-4">
               <div className="d-flex flex-column mb-4">
-                <h2 className="text-success fw-bold mb-2">{sections.available.title}</h2>
+                <div className="d-flex align-items-center gap-3 mb-2">
+                  <h2 className="text-success fw-bold mb-0">{sections.available.title}</h2>
+                  <span className="section-badge">
+                    {getSeasonIcon(getCurrentSeason())} Featured
+                  </span>
+                </div>
                 <p className="text-muted">{sections.available.subtitle}</p>
               </div>
               {loading.available ? renderLoading("available products") : (
@@ -360,39 +493,54 @@ const HomePage = () => {
                   {data.available.map((product) => (
                   <div key={product.id} className="col-md-4">
                     <Card className="h-100 border-0 shadow-sm hover-card">
-                      <div className="available-img-container">
+                      <div className="card-img-container">
                           <img 
-                            src={product.image.startsWith('http') 
+                            src={product.image?.startsWith('http') 
                               ? product.image 
                               : `${process.env.REACT_APP_BASE_URL}${product.image}`
                             }
-                            alt={product.name}
+                            alt={product.name || 'Product Image'}
                             className="card-img-top product-img"
                             onError={(e) => {
                               e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
                             }}
                           />
-                          <div className="seasonal-overlay">
-                            <span className="season-badge">
-                              {getSeasonIcon(product.season)} {RWANDA_SEASONS[product.season]?.label}
-                            </span>
-                        </div>
                         </div>
                         <Card.Body className="text-center d-flex flex-column justify-content-between">
                           <div>
-                            <Card.Title className="text-success fw-bold mb-2">{product.name}</Card.Title>
-                            <Card.Text className="text-muted mb-3">{RWANDA_SEASONS[product.season]?.description}</Card.Text>
-                            <p className="price mb-2">RWF {product.price?.toLocaleString()}</p>
-                            <p className="stock mb-3">Stock: {product.quantity} units</p>
-                      </div>
-                        <Button 
-                          variant="success" 
-                          className="rounded-pill px-4"
+                            <Card.Title className="product-name mb-3">{product.name}</Card.Title>
+                            <Card.Text className="product-description mb-4">
+                              {product.description || RWANDA_SEASONS[product.season]?.description}
+                            </Card.Text>
+                            <div className="info-container mt-auto">
+                              <div className="info-item">
+                                <span className="info-label">Price</span>
+                                <span className="info-value price">RWF {product.price?.toLocaleString()}</span>
+                              </div>
+                              <div className="info-item">
+                                <span className="info-label">Stock</span>
+                                <span className="info-value">
+                                  {product.quantity} units
+                                </span>
+                              </div>
+                              <div className="info-item">
+                                <span className="info-label">Seller</span>
+                                <span className="info-value seller">
+                                  {product.user ? 
+                                    `${product.user.firstname} ${product.user.lastname}` : 
+                                    'Seller information unavailable'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <Button 
+                            variant="success" 
+                            className="rounded-pill px-4 mt-4"
                             onClick={() => navigate(`/product/${product.id}`)}
-                        >
+                          >
                             View Details
-                        </Button>
-                      </Card.Body>
+                          </Button>
+                        </Card.Body>
                     </Card>
                   </div>
                 ))}
@@ -419,261 +567,408 @@ const HomePage = () => {
           }
         }
 
-        /* Common styles for all sections */
+        /* Modern Card Styles */
         .hover-card {
-          transition: all 0.3s ease;
-          border-radius: 12px;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          border-radius: 16px;
           overflow: hidden;
-          height: 420px;
+          height: 520px;
+          background: white;
+          border: none;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
         }
+
         .hover-card:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+          transform: translateY(-8px);
+          box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
         }
-        
-        /* Common image container styles */
-        .card-img-container, .seasonal-img-container, .available-img-container {
+
+        /* Image Container Styles */
+        .card-img-container, 
+        .seasonal-img-container, 
+        .available-img-container {
           position: relative;
-          padding-top: 60%;
-          background-color: #15803d;
+          height: 220px;
+          background: linear-gradient(45deg, #15803d, #84cc16);
           overflow: hidden;
-          display: flex;
-          align-items: flex-start;
-          justify-content: center;
+          border-bottom: 4px solid rgba(21, 128, 61, 0.1);
         }
         
         .product-img {
           width: 100%;
-          height: 180px;
+          height: 100%;
           object-fit: cover;
-          transition: transform 0.3s ease;
+          transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
         .hover-card:hover .product-img {
-          transform: scale(1.05);
+          transform: scale(1.08);
         }
 
-        /* Trending and Featured Collection styles */
-        .season-badge {
-          background: rgba(21, 128, 61, 0.9);
-          backdrop-filter: blur(4px);
-          border: 2px solid rgba(255, 255, 255, 0.3);
-          color: white;
-          padding: 0.95rem 0.45rem;
-          border-radius: 25px;
-          font-size: 1.1rem;
-          display: inline-flex;
-          align-items: center;
-          justify-content: flex-start;
-          white-space: nowrap;
-          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-          text-align: left;
-          font-weight: 500;
-          min-width: 200px;
-          max-width: 90%;
-          margin: 0 auto;
-          padding-right: 1.5rem;
-        }
-
-        .season-badge span {
-          display: inline-flex;
-          align-items: center;
-          text-align: left;
-          letter-spacing: 0.5px;
-          transform: translateX(-1rem);
-        }
-
-        .seasonal-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          padding: 1.5rem;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          pointer-events: none;
-          width: 100%;
-        }
-
-        /* Seasonal Selection specific styles */
-        .seasonal-period-badge {
-          background: rgba(21, 128, 61, 0.9);
-          backdrop-filter: blur(4px);
-          border: 2px solid rgba(255, 255, 255, 0.3);
-          color: white;
-          padding: 0.95rem 0.45rem;
-          border-radius: 25px;
-          font-size: 1.1rem;
-          display: inline-flex;
-          align-items: center;
-          justify-content: flex-start;
-          white-space: nowrap;
-          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-          text-align: left;
-          font-weight: 500;
-          min-width: 200px;
-          max-width: 90%;
-          margin: 0 auto;
-          padding-right: 1.5rem;
-        }
-
-        .seasonal-period-badge span {
-          display: inline-flex;
-          align-items: center;
-          text-align: left;
-          letter-spacing: 0.5px;
-          transform: translateX(-1rem);
-        }
-
-        .seasonal-badge-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          padding: 1.5rem;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          pointer-events: none;
-          width: 100%;
-        }
-
-        /* Icon styles for both types of badges */
-        .season-badge svg, .seasonal-period-badge svg {
-          flex-shrink: 0;
-          font-size: 1.3rem;
-        }
-
-        /* Text styles for both types of badges */
-        .season-badge span {
-          display: inline-flex;
-          align-items: center;
-          text-align: center;
-          letter-spacing: 0.5px;
-        }
-
-        .status-badge {
-          position: absolute;
-          top: 1rem;
-          left: 1rem;
-          padding: 0.5rem 1rem;
-          border-radius: 20px;
-          font-size: 0.875rem;
-          font-weight: 500;
-        }
-        .status-badge[data-status="Available"] {
-          background: #15803d;
-          color: white;
-        }
-        .status-badge[data-status="Out of Stock"] {
-          background: #dc3545;
-          color: white;
-        }
-        .price {
-          font-size: 1.5rem;
+        /* Product Information Styles */
+        .product-name {
+          font-size: 1.25rem;
           font-weight: 600;
+          color: #1a365d;
+          line-height: 1.4;
+          margin-bottom: 1rem;
+          min-height: 2.8rem;
+          max-height: 3.6rem;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+        }
+
+        .product-description {
+          font-size: 0.95rem;
+          color: #4a5568;
+          line-height: 1.5;
+          margin-bottom: 1.5rem;
+          min-height: 3rem;
+          max-height: 4.5rem;
+          overflow: hidden;
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+        }
+
+        /* Info Container Styles */
+        .info-container {
+          background-color: #f8fafc;
+          border-radius: 12px;
+          padding: 1rem;
+          margin: 1.5rem 0;
+          border: 1px solid rgba(21, 128, 61, 0.1);
+        }
+
+        .info-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0.5rem 0;
+          border-bottom: 1px solid rgba(21, 128, 61, 0.1);
+        }
+
+        .info-item:last-child {
+          border-bottom: none;
+          padding-bottom: 0;
+        }
+
+        .info-label {
+          font-size: 0.9rem;
+          color: #64748b;
+          font-weight: 500;
+          letter-spacing: 0.3px;
+        }
+
+        .info-value {
+          font-size: 1rem;
+          font-weight: 600;
+          color: #1e293b;
+        }
+
+        .info-value.price {
           color: #15803d;
+          font-size: 1.2rem;
+          font-weight: 700;
         }
-        .stock {
-          color: #6c757d;
-          font-size: 0.875rem;
+
+        .info-value.in-stock {
+          color: #15803d;
+          font-weight: 600;
         }
-        .text-success {
-          color: #15803d !important;
+
+        .info-value.out-of-stock {
+          color: #dc2626;
+          font-weight: 600;
         }
+
+        .info-value.seller {
+          color: #1e40af;
+          font-weight: 500;
+          font-style: normal;
+        }
+
+        /* Button Styles */
+        .btn-success,
+        .btn-outline-success {
+          padding: 0.75rem 1.5rem;
+          font-weight: 600;
+          letter-spacing: 0.3px;
+          border-radius: 25px;
+          transition: all 0.3s ease;
+          text-transform: uppercase;
+          font-size: 0.9rem;
+        }
+
         .btn-success {
           background-color: #15803d;
           border-color: #15803d;
+          box-shadow: 0 2px 4px rgba(21, 128, 61, 0.2);
         }
+
         .btn-success:hover {
           background-color: #166534;
           border-color: #166534;
+          box-shadow: 0 4px 6px rgba(21, 128, 61, 0.3);
+          transform: translateY(-2px);
         }
+
         .btn-outline-success {
           color: #15803d;
-          border-color: #15803d;
+          border: 2px solid #15803d;
+          background-color: transparent;
         }
+
         .btn-outline-success:hover {
           background-color: #15803d;
           border-color: #15803d;
           color: white;
-        }
-        .season-button {
-          padding: 0.75rem 1.5rem;
-          font-size: 1.1rem;
-          font-weight: 500;
-          min-width: 200px;
-          justify-content: center;
-        }
-        .season-text {
-          font-size: 1.1rem;
-          white-space: nowrap;
-        }
-        .seasonal-nav {
-          background: white;
-          padding: 1.5rem;
-          border-radius: 0.75rem;
-          margin-bottom: 1.5rem;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        }
-        .metrics-card {
-          background: white;
-          padding: 1rem;
-          border-radius: 0.5rem;
-          margin-bottom: 1rem;
-          transition: all 0.3s ease;
-        }
-        .metrics-card:hover {
           transform: translateY(-2px);
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        h2 {
-          font-size: 2rem;
-          letter-spacing: -0.5px;
-          margin-bottom: 0.5rem;
+
+        /* Section Badge Styles */
+        .section-badge {
+          background: linear-gradient(45deg, #15803d, #16a34a);
+          color: white;
+          padding: 0.6rem 1.2rem;
+          border-radius: 25px;
+          font-size: 0.95rem;
+          font-weight: 500;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          box-shadow: 0 2px 4px rgba(21, 128, 61, 0.2);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          backdrop-filter: blur(4px);
         }
-        .text-muted {
-          font-size: 1rem;
-          margin-bottom: 1rem;
+
+        .section-badge svg {
+          font-size: 1.2rem;
         }
-        .hover-card {
-          height: 420px;
-        }
-        .season-buttons-container {
-          display: flex;
-          flex-wrap: nowrap;
-          gap: 1rem;
-          justify-content: space-between;
-          width: 100%;
-        }
+
+        /* Updated Season Navigation Styles */
         .season-button {
           flex: 1;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 0.5rem;
-          padding: 0.40rem 1rem;
-          font-size: 0.9rem;
-          white-space: normal;
-          text-align: center;
-          min-height: 60px;
-          line-height: 1.2;
+          padding: 1rem;
+          font-size: 0.95rem;
+          font-weight: 500;
+          min-height: 80px;
+          border-radius: 12px;
+          transition: all 0.3s ease;
+          border: 2px solid transparent;
+          background: ${props => props.variant === "success" ? 'linear-gradient(45deg, #15803d, #16a34a)' : 'white'};
         }
-        .season-icon {
+
+        .season-content {
           display: flex;
           align-items: center;
-          font-size: 1.1rem;
+          gap: 0.75rem;
+          width: 100%;
         }
-        .season-label {
-          display: inline-block;
+
+        .season-icon {
+          font-size: 1.6rem;
+          display: flex;
+          align-items: center;
         }
-        @media (max-width: 768px) {
+
+        .season-text {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.25rem;
+        }
+
+        .season-name {
+          font-weight: 600;
+          font-size: 1rem;
+          color: inherit;
+          display: block;
+          text-align: left;
+        }
+
+        .season-period {
+          font-size: 0.85rem;
+          opacity: 0.9;
+          display: block;
+          text-align: left;
+        }
+
+        .season-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 6px rgba(21, 128, 61, 0.1);
+        }
+
+        .season-button.btn-success .season-name,
+        .season-button.btn-success .season-period {
+          color: white;
+        }
+
+        .season-button.btn-outline-success .season-name {
+          color: #15803d;
+        }
+
+        .season-button.btn-outline-success .season-period {
+          color: #64748b;
+        }
+
+        .season-button.btn-outline-success:hover .season-name,
+        .season-button.btn-outline-success:hover .season-period {
+          color: white;
+        }
+
+        .season-buttons-container {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 1rem;
+          width: 100%;
+        }
+
+        @media (max-width: 992px) {
           .season-buttons-container {
-            flex-wrap: wrap;
+            grid-template-columns: repeat(2, 1fr);
           }
-          
-          .season-button {
-            flex: 1 1 45%;
+        }
+
+        @media (max-width: 576px) {
+          .season-buttons-container {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        /* Section Styles */
+        section.bg-light {
+          border-radius: 16px;
+          padding: 2rem;
+          margin-bottom: 2rem;
+          background: rgba(255, 255, 255, 0.95) !important;
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(21, 128, 61, 0.1);
+        }
+
+        /* Loading State Styles */
+        .text-center.py-4 {
+          padding: 2rem;
+          background: rgba(255, 255, 255, 0.9);
+          border-radius: 12px;
+        }
+
+        .spinner-border {
+          width: 3rem;
+          height: 3rem;
+          border-width: 0.25rem;
+          color: #15803d;
+        }
+
+        /* Seasonal Section Specific Styles */
+        .seasonal-products-container {
+          margin-top: 2rem;
+        }
+
+        /* Consistent Card Styles Across All Sections */
+        .hover-card {
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          border-radius: 16px;
+          overflow: hidden;
+          height: 520px;
+          background: white;
+          border: none;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .card-img-container, 
+        .seasonal-img-container, 
+        .available-img-container {
+          position: relative;
+          height: 220px;
+          background: linear-gradient(45deg, #15803d, #84cc16);
+          overflow: hidden;
+          border-bottom: 4px solid rgba(21, 128, 61, 0.1);
+        }
+
+        .product-name {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #1a365d;
+          line-height: 1.4;
+          margin-bottom: 1rem;
+          min-height: 2.8rem;
+          max-height: 3.6rem;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+        }
+
+        .product-description {
+          font-size: 0.95rem;
+          color: #4a5568;
+          line-height: 1.5;
+          margin-bottom: 1.5rem;
+          min-height: 3rem;
+          max-height: 4.5rem;
+          overflow: hidden;
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+        }
+
+        .info-container {
+          background-color: #f8fafc;
+          border-radius: 12px;
+          padding: 1rem;
+          margin: 1.5rem 0;
+          border: 1px solid rgba(21, 128, 61, 0.1);
+        }
+
+        .info-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0.5rem 0;
+          border-bottom: 1px solid rgba(21, 128, 61, 0.1);
+        }
+
+        .info-item:last-child {
+          border-bottom: none;
+          padding-bottom: 0;
+        }
+
+        /* Consistent Button Styles */
+        .btn-success,
+        .btn-outline-success {
+          padding: 0.75rem 1.5rem;
+          font-weight: 600;
+          letter-spacing: 0.3px;
+          border-radius: 25px;
+          transition: all 0.3s ease;
+          text-transform: uppercase;
+          font-size: 0.9rem;
+          width: 100%;
+          max-width: 200px;
+          margin: 0 auto;
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+          .hover-card {
+            height: auto;
+            min-height: 520px;
+          }
+
+          .product-name {
+            min-height: auto;
+          }
+
+          .product-description {
+            min-height: auto;
           }
         }
       `}</style>

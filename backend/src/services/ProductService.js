@@ -6,6 +6,22 @@ const Notifications = db["Notifications"];
 const Categories = db["Categories"];
 const { Op } = require("sequelize");
 
+// Add this helper function at the top
+const includeUserAndCategory = {
+  include: [
+    {
+      model: Categories,
+      as: "category",
+    },
+    {
+      model: users,
+      as: "user",
+      attributes: ['id', 'firstname', 'lastname', 'image', 'status'],
+      where: { status: 'active' }
+    }
+  ]
+};
+
 export const getuserproduct = async (userID) => {
   try {
     const Info = await Products.findAll({
@@ -71,19 +87,11 @@ export const generalproducts_available = async () => {
   try {
     const Info = await Products.findAll({
       where: { status: "In Stock"},
-      include: [
-        {
-          model: Categories,
-          as: "category",
-        }
-      ],   
-    }
-      
-    );
-
+      ...includeUserAndCategory
+    });
     return Info;
   } catch (error) {
-    console.error("Error fetching profile details for user:", error);
+    console.error("Error fetching available products:", error);
     throw error;
   }
 };

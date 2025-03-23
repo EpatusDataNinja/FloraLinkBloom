@@ -16,7 +16,10 @@ import {
   getAllUsersWithProductStats,
   getPendingProductsController,
   getApprovedProducts,
-  searchProductsController
+  searchProductsController,
+  getTrendingProducts,
+  getSeasonalProducts,
+  getFeaturedProducts
 } from "../controllers/ProductController.js";
 import { protect,optionalProtect } from "../middlewares/protect.js";
 
@@ -93,6 +96,17 @@ const validateRequiredFields = (req, res, next) => {
   next();
 };
 
+// Add this before your routes
+const logResponse = (req, res, next) => {
+  const oldJson = res.json;
+  res.json = function(data) {
+    console.log('API Response for:', req.path);
+    console.log('Response data:', JSON.stringify(data, null, 2));
+    return oldJson.call(this, data);
+  };
+  next();
+};
+
 // Reorder routes - more specific routes first
 router.get("/instock", protect, instockController);
 router.get("/outofstock", protect, out_of_stock_controller);
@@ -102,6 +116,9 @@ router.get("/user/:id", userProduct);
 router.get("/pending", protect, getPendingProductsController);
 router.get("/approved", optionalProtect, getApprovedProducts);
 router.get("/search", searchProductsController);
+router.get("/trending", logResponse, getTrendingProducts);
+router.get("/seasonal/:season", logResponse, getSeasonalProducts);
+router.get("/featured", logResponse, getFeaturedProducts);
 router.post("/add", protect, 
   (req, res, next) => {
     console.log('Add request received');
