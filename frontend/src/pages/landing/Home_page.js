@@ -6,10 +6,11 @@ import Footer from "../../components_part/Footer";
 import { useNavigate } from "react-router-dom";
 import Services from '../../components_part/Services';
 import HomePageHero from '../../components_part/HomePageHero';
-import { Card, Button, Spinner } from "react-bootstrap";
+import { Card, Button, Spinner, Modal } from "react-bootstrap";
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { FaLeaf, FaSun, FaSnowflake, FaTree } from 'react-icons/fa';
+import { FaLeaf, FaSun, FaSnowflake, FaTree, FaShoppingCart, FaHeart } from 'react-icons/fa';
+import GuestCartModal from '../../components_part/GuestCartModal';
 
 const HomePage = () => {
   // Define Rwanda's seasons first
@@ -65,6 +66,9 @@ const HomePage = () => {
     available: []
   });
   const [selectedSeason, setSelectedSeason] = useState(getCurrentSeason());
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [showGuestCartModal, setShowGuestCartModal] = useState(false);
 
   // Get season icon
   const getSeasonIcon = (season) => {
@@ -321,6 +325,176 @@ const HomePage = () => {
     return `${product.user.firstname} ${product.user.lastname}`;
   };
 
+  // Add this function after your existing functions
+  const handleAddToCart = (product) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      // For guest users, save to localStorage
+      const currentCart = JSON.parse(localStorage.getItem('guestCart') || '[]');
+      const existingItem = currentCart.find(item => item.id === product.id);
+      
+      if (existingItem) {
+        existingItem.quantity += 1;
+      } else {
+        currentCart.push({
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          image: product.image,
+          quantity: 1,
+          availableQuantity: product.quantity,
+          sellerName: product.user ? `${product.user.firstname} ${product.user.lastname}` : 'Unknown Seller'
+        });
+      }
+      
+      localStorage.setItem('guestCart', JSON.stringify(currentCart));
+      setShowGuestCartModal(true);
+      toast.success('Product added to cart!');
+    } else {
+      // For logged-in users, redirect to cart
+      navigate('/cart');
+    }
+  };
+
+  // Add this component before the return statement
+  const ProductDetailsModal = ({ product, show, onHide }) => {
+    if (!product) return null;
+
+    return (
+      <Modal show={show} onHide={onHide} size="lg" centered>
+        <Modal.Header closeButton className="border-0 bg-success text-white">
+          <Modal.Title>Product Details</Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="p-0">
+          <div className="row g-0">
+            <div className="col-md-6">
+              <div className="product-image-container">
+                <img
+                  src={product.image?.startsWith('http') 
+                    ? product.image 
+                    : `${process.env.REACT_APP_BASE_URL}${product.image}`}
+                  alt={product.name}
+                  className="img-fluid rounded-start"
+                  onError={(e) => {
+                    e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
+                  }}
+                />
+              </div>
+            </div>
+            <div className="col-md-6">
+              <div className="p-4">
+                <h3 className="product-name mb-3">{product.name}</h3>
+                <p className="product-description mb-4">
+                  {product.description || RWANDA_SEASONS[product.season]?.description}
+                </p>
+                
+                <div className="info-container mb-4">
+                  <div className="info-item">
+                    <span className="info-label">Price</span>
+                    <span className="info-value price">
+                      RWF {product.price?.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">Stock</span>
+                    <span className="info-value">
+                      {product.quantity} units
+                    </span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">Seller</span>
+                    <span className="info-value seller">
+                      {product.user ? 
+                        `${product.user.firstname} ${product.user.lastname}` : 
+                        'Seller information unavailable'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="product-actions">
+                  <Button
+                    variant="success"
+                    className="w-100 mb-3"
+                    onClick={() => handleAddToCart(product)}
+                    disabled={product.quantity <= 0}
+                  >
+                    <FaShoppingCart className="me-2" />
+                    Add to Cart
+                  </Button>
+                  {/* Wishlist functionality commented for future implementation
+                  <Button
+                    variant="outline-success"
+                    className="w-100"
+                    onClick={() => {
+                      const token = localStorage.getItem('token');
+                      if (!token) {
+                        navigate('/login', { 
+                          state: { 
+                            returnUrl: '/wishlist',
+                            message: 'Please sign in to add items to your wishlist'
+                          }
+                        });
+                      } else {
+                        // Implement wishlist functionality
+                        // TODO:
+                        // 1. Create wishlist API endpoint
+                        // 2. Add product to user's wishlist
+                        // 3. Show success/error message
+                        // 4. Update wishlist count in header
+                      }
+                    }}
+                  >
+                    <FaHeart className="me-2" />
+                    Add to Wishlist
+                  </Button>
+                  */}
+                </div>
+              </div>
+            </div>
+          </div>
+        </Modal.Body>
+      </Modal>
+    );
+  };
+
+  // Update the card component for all sections
+  const ProductCard = ({ product, onViewDetails }) => (
+    <Card className="h-100 border-0 shadow-sm hover-card">
+      <div className="card-img-container">
+        <img 
+          src={product.image?.startsWith('http') 
+            ? product.image 
+            : `${process.env.REACT_APP_BASE_URL}${product.image}`}
+          alt={product.name || 'Product Image'}
+          className="card-img-top product-img"
+          onError={(e) => {
+            e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
+          }}
+        />
+      </div>
+      <Card.Body className="text-center d-flex flex-column justify-content-between">
+        <div>
+          <Card.Title className="product-name mb-2">{product.name}</Card.Title>
+          <div className="price-tag mb-3">
+            <span className="currency">RWF</span>
+            <span className="amount">{product.price?.toLocaleString()}</span>
+          </div>
+          <Card.Text className="product-description">
+            {product.description?.slice(0, 60) || RWANDA_SEASONS[product.season]?.description}
+            {product.description?.length > 60 ? '...' : ''}
+          </Card.Text>
+        </div>
+        <Button 
+          variant="success" 
+          className="view-details-btn"
+          onClick={() => onViewDetails(product)}
+        >
+          View Details
+        </Button>
+      </Card.Body>
+    </Card>
+  );
+
   return (
     <div className="min-h-screen">
       <UserHeader setShow={setShow} />
@@ -349,62 +523,19 @@ const HomePage = () => {
               {loading.trending ? (
                 renderLoading("trending products")
               ) : data.trending.length > 0 ? (
-              <div className="row g-4">
+                <div className="row g-4">
                   {data.trending.map((product) => (
-                  <div key={product.id} className="col-md-4">
-                    <Card className="h-100 border-0 shadow-sm hover-card">
-                      <div className="card-img-container">
-                          <img 
-                            src={product.image?.startsWith('http') 
-                              ? product.image 
-                              : `${process.env.REACT_APP_BASE_URL}${product.image}`
-                            }
-                            alt={product.name || 'Product Image'}
-                            className="card-img-top product-img"
-                            onError={(e) => {
-                              e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
-                            }}
-                          />
-                        </div>
-                        <Card.Body className="text-center d-flex flex-column justify-content-between">
-                          <div>
-                            <Card.Title className="product-name mb-3">{product.name}</Card.Title>
-                            <Card.Text className="product-description mb-4">
-                              {product.description || RWANDA_SEASONS[product.season]?.description}
-                            </Card.Text>
-                            <div className="info-container mt-auto">
-                              <div className="info-item">
-                                <span className="info-label">Price</span>
-                                <span className="info-value price">RWF {product.price?.toLocaleString()}</span>
-                              </div>
-                              <div className="info-item">
-                                <span className="info-label">Stock</span>
-                                <span className="info-value">
-                                  {product.quantity} units
-                                </span>
-                              </div>
-                              <div className="info-item">
-                                <span className="info-label">Seller</span>
-                                <span className="info-value seller">
-                                  {product.user ? 
-                                    `${product.user.firstname} ${product.user.lastname}` : 
-                                    'Seller information unavailable'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <Button 
-                            variant="success" 
-                            className="rounded-pill px-4 mt-4"
-                            onClick={() => navigate(`/product/${product.id}`)}
-                          >
-                            View Details
-                          </Button>
-                        </Card.Body>
-                    </Card>
-                  </div>
-                ))}
-              </div>
+                    <div key={product.id} className="col-md-4">
+                      <ProductCard 
+                        product={product}
+                        onViewDetails={(p) => {
+                          setSelectedProduct(p);
+                          setShowProductModal(true);
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="text-center py-4">
                   <p className="text-muted">No trending products available at the moment.</p>
@@ -417,62 +548,19 @@ const HomePage = () => {
               <SeasonalNav />
               <div className="seasonal-products-container">
                 {loading.seasonal ? renderLoading("seasonal products") : (
-                <div className="row g-4">
+                  <div className="row g-4">
                     {data.seasonal.map((product) => (
                       <div key={product.id} className="col-md-3">
-                      <Card className="h-100 border-0 shadow-sm hover-card">
-                        <div className="card-img-container">
-                          <img 
-                            src={product.image?.startsWith('http') 
-                              ? product.image 
-                              : `${process.env.REACT_APP_BASE_URL}${product.image}`
-                            }
-                            alt={product.name || 'Product Image'}
-                            className="card-img-top product-img"
-                            onError={(e) => {
-                              e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
-                            }}
-                          />
-                        </div>
-                        <Card.Body className="text-center d-flex flex-column justify-content-between">
-                          <div>
-                            <Card.Title className="product-name mb-3">{product.name}</Card.Title>
-                            <Card.Text className="product-description mb-4">
-                              {product.description || RWANDA_SEASONS[selectedSeason]?.description}
-                            </Card.Text>
-                            <div className="info-container mt-auto">
-                              <div className="info-item">
-                                <span className="info-label">Price</span>
-                                <span className="info-value price">RWF {product.price?.toLocaleString()}</span>
-                              </div>
-                              <div className="info-item">
-                                <span className="info-label">Stock</span>
-                                <span className="info-value">
-                                  {product.quantity} units
-                                </span>
-                              </div>
-                              <div className="info-item">
-                                <span className="info-label">Seller</span>
-                                <span className="info-value seller">
-                                  {product.user ? 
-                                    `${product.user.firstname} ${product.user.lastname}` : 
-                                    'Seller information unavailable'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <Button 
-                            variant="success" 
-                            className="rounded-pill px-4 mt-4"
-                            onClick={() => navigate(`/product/${product.id}`)}
-                          >
-                            View Details
-                          </Button>
-                        </Card.Body>
-                      </Card>
-                    </div>
-                  ))}
-                </div>
+                        <ProductCard 
+                          product={product}
+                          onViewDetails={(p) => {
+                            setSelectedProduct(p);
+                            setShowProductModal(true);
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </section>
@@ -489,68 +577,37 @@ const HomePage = () => {
                 <p className="text-muted">{sections.available.subtitle}</p>
               </div>
               {loading.available ? renderLoading("available products") : (
-              <div className="row g-4">
+                <div className="row g-4">
                   {data.available.map((product) => (
-                  <div key={product.id} className="col-md-4">
-                    <Card className="h-100 border-0 shadow-sm hover-card">
-                      <div className="card-img-container">
-                          <img 
-                            src={product.image?.startsWith('http') 
-                              ? product.image 
-                              : `${process.env.REACT_APP_BASE_URL}${product.image}`
-                            }
-                            alt={product.name || 'Product Image'}
-                            className="card-img-top product-img"
-                            onError={(e) => {
-                              e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
-                            }}
-                          />
-                        </div>
-                        <Card.Body className="text-center d-flex flex-column justify-content-between">
-                          <div>
-                            <Card.Title className="product-name mb-3">{product.name}</Card.Title>
-                            <Card.Text className="product-description mb-4">
-                              {product.description || RWANDA_SEASONS[product.season]?.description}
-                            </Card.Text>
-                            <div className="info-container mt-auto">
-                              <div className="info-item">
-                                <span className="info-label">Price</span>
-                                <span className="info-value price">RWF {product.price?.toLocaleString()}</span>
-                              </div>
-                              <div className="info-item">
-                                <span className="info-label">Stock</span>
-                                <span className="info-value">
-                                  {product.quantity} units
-                                </span>
-                              </div>
-                              <div className="info-item">
-                                <span className="info-label">Seller</span>
-                                <span className="info-value seller">
-                                  {product.user ? 
-                                    `${product.user.firstname} ${product.user.lastname}` : 
-                                    'Seller information unavailable'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <Button 
-                            variant="success" 
-                            className="rounded-pill px-4 mt-4"
-                            onClick={() => navigate(`/product/${product.id}`)}
-                          >
-                            View Details
-                          </Button>
-                        </Card.Body>
-                    </Card>
-                  </div>
-                ))}
-              </div>
+                    <div key={product.id} className="col-md-4">
+                      <ProductCard 
+                        product={product}
+                        onViewDetails={(p) => {
+                          setSelectedProduct(p);
+                          setShowProductModal(true);
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
               )}
             </section>
           </div>
           <Footer />
         </main>
       </div>
+
+      {/* Add these modals here */}
+      <ProductDetailsModal
+        product={selectedProduct}
+        show={showProductModal}
+        onHide={() => setShowProductModal(false)}
+      />
+      
+      <GuestCartModal
+        show={showGuestCartModal}
+        onHide={() => setShowGuestCartModal(false)}
+      />
 
       <style jsx="true">{`
         .main-content {
@@ -572,7 +629,7 @@ const HomePage = () => {
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           border-radius: 16px;
           overflow: hidden;
-          height: 520px;
+          height: 420px;
           background: white;
           border: none;
           box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
@@ -611,9 +668,8 @@ const HomePage = () => {
           font-weight: 600;
           color: #1a365d;
           line-height: 1.4;
-          margin-bottom: 1rem;
-          min-height: 2.8rem;
-          max-height: 3.6rem;
+          margin-bottom: 0.5rem;
+          height: 2.8rem;
           overflow: hidden;
           text-overflow: ellipsis;
           display: -webkit-box;
@@ -621,16 +677,27 @@ const HomePage = () => {
           -webkit-box-orient: vertical;
         }
 
+        .price-tag {
+          font-size: 1.25rem;
+          color: #15803d;
+          font-weight: 700;
+        }
+
+        .price-tag .currency {
+          font-size: 0.9rem;
+          margin-right: 0.25rem;
+          opacity: 0.9;
+        }
+
         .product-description {
-          font-size: 0.95rem;
-          color: #4a5568;
+          font-size: 0.9rem;
+          color: #64748b;
           line-height: 1.5;
-          margin-bottom: 1.5rem;
-          min-height: 3rem;
-          max-height: 4.5rem;
+          margin-bottom: 1rem;
+          height: 3rem;
           overflow: hidden;
           display: -webkit-box;
-          -webkit-line-clamp: 3;
+          -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
         }
 
@@ -876,7 +943,7 @@ const HomePage = () => {
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           border-radius: 16px;
           overflow: hidden;
-          height: 520px;
+          height: 420px;
           background: white;
           border: none;
           box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
@@ -897,9 +964,8 @@ const HomePage = () => {
           font-weight: 600;
           color: #1a365d;
           line-height: 1.4;
-          margin-bottom: 1rem;
-          min-height: 2.8rem;
-          max-height: 3.6rem;
+          margin-bottom: 0.5rem;
+          height: 2.8rem;
           overflow: hidden;
           text-overflow: ellipsis;
           display: -webkit-box;
@@ -907,16 +973,27 @@ const HomePage = () => {
           -webkit-box-orient: vertical;
         }
 
+        .price-tag {
+          font-size: 1.25rem;
+          color: #15803d;
+          font-weight: 700;
+        }
+
+        .price-tag .currency {
+          font-size: 0.9rem;
+          margin-right: 0.25rem;
+          opacity: 0.9;
+        }
+
         .product-description {
-          font-size: 0.95rem;
-          color: #4a5568;
+          font-size: 0.9rem;
+          color: #64748b;
           line-height: 1.5;
-          margin-bottom: 1.5rem;
-          min-height: 3rem;
-          max-height: 4.5rem;
+          margin-bottom: 1rem;
+          height: 3rem;
           overflow: hidden;
           display: -webkit-box;
-          -webkit-line-clamp: 3;
+          -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
         }
 
@@ -960,16 +1037,62 @@ const HomePage = () => {
         @media (max-width: 768px) {
           .hover-card {
             height: auto;
-            min-height: 520px;
+            min-height: 420px;
           }
+        }
 
-          .product-name {
-            min-height: auto;
-          }
+        /* Add these new styles */
+        .product-image-container {
+          height: 400px;
+          overflow: hidden;
+        }
 
-          .product-description {
-            min-height: auto;
-          }
+        .product-image-container img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .product-actions {
+          padding: 1rem 0;
+          border-top: 1px solid rgba(21, 128, 61, 0.1);
+          border-bottom: 1px solid rgba(21, 128, 61, 0.1);
+        }
+
+        .additional-info {
+          font-size: 0.95rem;
+        }
+
+        .additional-info ul li {
+          color: #4a5568;
+        }
+
+        .additional-info strong {
+          color: #1a365d;
+          margin-right: 0.5rem;
+        }
+
+        .view-details-btn {
+          padding: 0.75rem 1.5rem;
+          font-weight: 600;
+          letter-spacing: 0.3px;
+          border-radius: 25px;
+          transition: all 0.3s ease;
+          text-transform: uppercase;
+          font-size: 0.9rem;
+          width: 100%;
+          max-width: 200px;
+          margin: 0 auto;
+          background-color: #15803d;
+          border-color: #15803d;
+          box-shadow: 0 2px 4px rgba(21, 128, 61, 0.2);
+        }
+
+        .view-details-btn:hover {
+          background-color: #166534;
+          border-color: #166534;
+          box-shadow: 0 4px 6px rgba(21, 128, 61, 0.3);
+          transform: translateY(-2px);
         }
       `}</style>
     </div>
