@@ -184,17 +184,35 @@ const LandingPage = () => {
             return;
         }
 
+        if (!formDataImage.image) {
+            console.error('No image selected');
+            toast.error('Please select an image to upload');
+            return;
+        }
+
+        // Log file details
+        console.log('Selected file:', {
+            name: formDataImage.image.name,
+            type: formDataImage.image.type,
+            size: formDataImage.image.size
+        });
+
         try {
             setLoading(true);
             const formDataUpload = new FormData();
             formDataUpload.append('image', formDataImage.image);
 
             console.log('Sending request to update user:', ID);
+            console.log('FormData contents:', {
+                hasImage: formDataUpload.has('image'),
+                imageType: formDataImage.image.type
+            });
 
             const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/users/update/${ID}`, {
                 method: 'PUT',
                 headers: {
                     Authorization: `Bearer ${token}`,
+                    // Remove Content-Type header to let browser set it with boundary
                 },
                 body: formDataUpload,
             });
@@ -221,10 +239,12 @@ const LandingPage = () => {
             } else {
                 setError(responseData.message);
                 toast.error(responseData.message);
+                console.error('Upload failed:', responseData);
             }
         } catch (error) {
             console.error('Error updating profile picture:', error);
             setError('Failed to update profile picture. Please try again later.');
+            toast.error('Failed to update profile picture. Please try again later.');
         } finally {
             setLoading(false);
         }

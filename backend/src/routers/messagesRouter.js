@@ -46,15 +46,13 @@ const upload = multer({
 });
 
 // Order matters! Put more specific routes first
+router.get("/history", protect, getChatHistoryController);
 router.get("/unread", protect, getUnreadMessagesController);
 router.get("/unread/count", protect, getUnreadMessagesCount);
-router.get("/:id", protect, MessageWithAllController);
-router.post("/add/:id", protect, addMessageController);
-
-// New routes
-router.post("/upload/:id", protect, upload.single('media'), uploadMedia);
 router.get("/search/:query", protect, searchMessages);
 router.get("/export/:userId", protect, exportChat);
-router.get("/history", protect, getChatHistoryController);
+router.post("/upload/:id", protect, upload.single('media'), uploadMedia);
+router.get("/:id", protect, MessageWithAllController);
+router.post("/add/:id", protect, addMessageController);
 
 export default router;

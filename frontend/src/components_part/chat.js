@@ -25,24 +25,6 @@ const fetchUsers = async (token, role) => {
   return [];
 };
 
-const fetchMessages = async (token, receiverId) => {
-  if (!token || !receiverId) return [];
-  
-  const response = await fetch(
-    `${process.env.REACT_APP_BASE_URL}/api/v1/message/${receiverId}`,
-    {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'accept': '*/*'
-      }
-    }
-  );
-
-  const data = await response.json();
-  return data.success ? data.data : [];
-};
-
 const sendMessage = async (token, receiverId, messageData) => {
   try {
     const response = await fetch(`${process.env.REACT_APP_BASE_URL}/api/v1/message/add/${receiverId}`, {
@@ -145,6 +127,8 @@ const Chat = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showMessageMenu, setShowMessageMenu] = useState(null);
+  const [lastActiveTime, setLastActiveTime] = useState({});
+  const onlineStatusRef = useRef({});
   
   const socketRef = useRef();
   const messagesEndRef = useRef(null);
@@ -153,6 +137,64 @@ const Chat = () => {
 
   const user = JSON.parse(localStorage.getItem('user'));
   const token = localStorage.getItem('token');
+
+  const updateOnlineStatus = (userId, status) => {
+    setOnlineUsers(prev => {
+      const newSet = new Set(prev);
+      if (status) {
+        newSet.add(userId);
+      } else {
+        newSet.delete(userId);
+      }
+      return newSet;
+    });
+
+    if (!status) {
+      setLastActiveTime(prev => ({
+        ...prev,
+        [userId]: new Date().toISOString()
+      }));
+    }
+  };
+
+  const fetchMessages = async (token, receiverId) => {
+    if (!token || !receiverId) return [];
+    
+    try {
+      console.log('Fetching messages for receiver:', receiverId);
+      const response = await fetch(
+        `${process.env.REACT_APP_BASE_URL}/api/v1/message/${receiverId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'accept': '*/*'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Fetched messages:', data);
+      
+      if (data.success) {
+        return data.data.map(msg => ({
+          ...msg,
+          status: msg.isRead ? MessageStatus.READ : 
+                  (msg.isDelivered ? MessageStatus.DELIVERED : MessageStatus.SENT)
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      setError(error.message || 'Failed to load messages. Please try again.');
+      return [];
+    }
+  };
 
   useEffect(() => {
     if (!token || !user) {
@@ -206,7 +248,7 @@ const Chat = () => {
 
   useEffect(() => {
     if (selectedUser) {
-      fetchMessages();
+      fetchMessages(token, selectedUser.id);
     }
   }, [selectedUser]);
 
@@ -220,6 +262,7 @@ const Chat = () => {
     let reconnectAttempts = 0;
     const maxReconnectAttempts = 5;
     const reconnectDelay = 3000;
+    const statusUpdateTimeout = {};
 
     try {
       socketRef.current = io(process.env.REACT_APP_BASE_URL, {
@@ -228,23 +271,31 @@ const Chat = () => {
         reconnectionAttempts: maxReconnectAttempts,
         reconnectionDelay: reconnectDelay,
         timeout: 10000,
-        transports: ['websocket', 'polling']
+        transports: ['websocket', 'polling'],
+        forceNew: true,
+        path: '/socket.io/'
       });
 
       socketRef.current.on('connect', () => {
         console.log('Connected to socket server');
         setIsOnline(true);
         reconnectAttempts = 0;
+        setError(null);
       });
 
       socketRef.current.on('connect_error', (error) => {
         console.error('Socket connection error:', error);
         setIsOnline(false);
+        setError('Connection error. Please check your internet connection.');
       });
 
       socketRef.current.on('disconnect', (reason) => {
         console.log('Socket disconnected:', reason);
         setIsOnline(false);
+        if (reason === 'io server disconnect') {
+          // Server initiated disconnect, try to reconnect
+          socketRef.current.connect();
+        }
       });
 
       socketRef.current.on('reconnect_attempt', (attemptNumber) => {
@@ -258,15 +309,25 @@ const Chat = () => {
       });
 
       socketRef.current.on('userOnline', (userId) => {
-        setOnlineUsers(prev => new Set([...prev, userId]));
+        // Clear any pending offline status update
+        if (statusUpdateTimeout[userId]) {
+          clearTimeout(statusUpdateTimeout[userId]);
+        }
+        updateOnlineStatus(userId, true);
       });
 
       socketRef.current.on('userOffline', (userId) => {
-        setOnlineUsers(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(userId);
-          return newSet;
-        });
+        // Add a small delay before marking user as offline to prevent flickering
+        statusUpdateTimeout[userId] = setTimeout(() => {
+          updateOnlineStatus(userId, false);
+        }, 2000);
+      });
+
+      socketRef.current.on('lastActive', ({ userId, timestamp }) => {
+        setLastActiveTime(prev => ({
+          ...prev,
+          [userId]: timestamp
+        }));
       });
 
       socketRef.current.on('typing', ({ senderId }) => {
@@ -311,6 +372,7 @@ const Chat = () => {
 
       socketRef.current.on('messageError', (error) => {
         console.error('Message error:', error);
+        setError('Error sending message. Please try again.');
       });
 
       socketRef.current.on('messageDelivered', ({ messageId }) => {
@@ -345,9 +407,13 @@ const Chat = () => {
             const data = await response.json();
             if (data.success) {
               setChatHistory(data.data);
+            } else {
+              console.error('Failed to update chat history:', data.message);
+              setError('Failed to update chat history. Please refresh the page.');
             }
           } catch (error) {
             console.error('Error updating chat history:', error);
+            setError('Error updating chat history. Please try again.');
           }
         }
       });
@@ -362,13 +428,9 @@ const Chat = () => {
         }
       }, 30000);
 
-      socketRef.current.on('disconnect', () => {
-        clearInterval(heartbeat);
-        console.log('Socket disconnected');
-        setIsOnline(false);
-      });
-
       return () => {
+        Object.values(statusUpdateTimeout).forEach(clearTimeout);
+        clearInterval(heartbeat);
         if (socketRef.current) {
           socketRef.current.disconnect();
         }
@@ -377,7 +439,7 @@ const Chat = () => {
       console.error('Socket initialization error:', error);
       setError('Failed to connect to chat server');
     }
-  }, [token, selectedUser?.id]);
+  }, [token]);
 
   useEffect(() => {
     const loadChatHistory = async () => {
@@ -448,27 +510,28 @@ const Chat = () => {
   }
 
   const handleUserSelect = async (selectedUser) => {
-    setSelectedUser(selectedUser);
-    setSelectedUserName(`${selectedUser.firstname} ${selectedUser.lastname}`);
-    
     try {
+      console.log('Selecting user:', selectedUser);
+      setSelectedUser(selectedUser);
+      setSelectedUserName(`${selectedUser.firstname} ${selectedUser.lastname}`);
+      setMessages([]); // Clear existing messages
+      
       const messages = await fetchMessages(token, selectedUser.id);
-      setMessages(messages.map(msg => ({
-        ...msg,
-        status: msg.isRead ? MessageStatus.READ : 
-                (msg.isDelivered ? MessageStatus.DELIVERED : MessageStatus.SENT)
-      })));
-    
-      setUnreadMessages(prev => ({
-        ...prev,
-        [selectedUser.id]: 0
-      }));
-
-      if (messages.length > 0) {
-        socketRef.current.emit('messageRead', {
-          senderId: selectedUser.id,
-          messageId: messages[messages.length - 1]?.id
-        });
+      console.log('Loaded messages:', messages);
+      
+      if (messages && messages.length > 0) {
+        setMessages(messages);
+        
+        // Mark messages as read
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage && !lastMessage.isRead) {
+          socketRef.current.emit('messageRead', {
+            messageId: lastMessage.id,
+            senderId: selectedUser.id
+          });
+        }
+      } else {
+        setMessages([]); // Set empty array if no messages
       }
 
       // Update chat history to reflect read status
@@ -478,7 +541,9 @@ const Chat = () => {
           : chat
       ));
     } catch (error) {
-      console.error('Error fetching messages:', error);
+      console.error('Error in handleUserSelect:', error);
+      setError('Failed to load chat. Please try again.');
+      setMessages([]); // Clear messages on error
     }
   };
 
@@ -679,6 +744,15 @@ const Chat = () => {
     }
   };
 
+  const getLastActiveText = (userId) => {
+    if (onlineUsers.has(userId)) return 'Online';
+    
+    const lastActive = lastActiveTime[userId];
+    if (!lastActive) return 'Offline';
+    
+    return `Last seen ${formatTimeAgo(lastActive)}`;
+  };
+
   return (
     <div className="chat-container">
         <div className="user-list">
@@ -705,47 +779,50 @@ const Chat = () => {
                   <div className="chat-section">
                     <h4 className="section-title">Recent Chats</h4>
                     {chatHistory && chatHistory.length > 0 ? (
-                      chatHistory.map(({ lastMessage, unreadCount, otherUser, totalMessages }) => (
-                        <div
-                          key={otherUser.id}
-                          className={`user-item ${
-                            selectedUser?.id === otherUser.id ? 'active' : ''
-                          } ${unreadCount > 0 ? 'unread' : ''}`}
-                          onClick={() => handleUserSelect(otherUser)}
-                        >
-                          <div className="user-avatar">
-                            <img
-                              src={validateImageUrl(otherUser.image, Image)}
-                              alt={otherUser.firstname}
-                              className="user-avatar-img"
-                            />
-                            <span className={`status-indicator ${
-                              onlineUsers.has(otherUser.id) ? 'online' : 'offline'
-                            }`}></span>
-                          </div>
-                          <div className="user-info">
-                            <div className="user-header">
-                              <h4 className="user-name">
-                                {`${otherUser.firstname} ${otherUser.lastname}`}
-                              </h4>
-                              <span className="message-time">
-                                {formatTimeAgo(lastMessage.createdAt)}
-                              </span>
+                      chatHistory.map((chat, index) => {
+                        const uniqueKey = `${chat.otherUser.id}-${index}`;
+                        return (
+                          <div
+                            key={uniqueKey}
+                            className={`user-item ${
+                              selectedUser?.id === chat.otherUser.id ? 'active' : ''
+                            } ${chat.unreadCount > 0 ? 'unread' : ''}`}
+                            onClick={() => handleUserSelect(chat.otherUser)}
+                          >
+                            <div className="user-avatar">
+                              <img
+                                src={validateImageUrl(chat.otherUser.image, Image)}
+                                alt={chat.otherUser.firstname}
+                                className="user-avatar-img"
+                              />
+                              <span className={`status-indicator ${
+                                onlineUsers.has(chat.otherUser.id) ? 'online' : 'offline'
+                              }`}></span>
                             </div>
-                            <div className="message-preview">
-                              <p className="last-message">
-                                {lastMessage.mediaType !== 'text' ? 
-                                  `Sent ${lastMessage.mediaType}` : 
-                                  lastMessage.message.substring(0, 30)}
-                                {lastMessage.message.length > 30 ? '...' : ''}
-                              </p>
-                              {unreadCount > 0 && (
-                                <span className="unread-badge">{unreadCount}</span>
-                              )}
+                            <div className="user-info">
+                              <div className="user-header">
+                                <h4 className="user-name">
+                                  {`${chat.otherUser.firstname} ${chat.otherUser.lastname}`}
+                                </h4>
+                                <span className="message-time">
+                                  {formatTimeAgo(chat.lastMessage.createdAt)}
+                                </span>
+                              </div>
+                              <div className="message-preview">
+                                <p className="last-message">
+                                  {chat.lastMessage.mediaType !== 'text' ? 
+                                    `Sent ${chat.lastMessage.mediaType}` : 
+                                    chat.lastMessage.message.substring(0, 30)}
+                                  {chat.lastMessage.message.length > 30 ? '...' : ''}
+                                </p>
+                                {chat.unreadCount > 0 && (
+                                  <span className="unread-badge">{chat.unreadCount}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="no-chats">
                         <p>No conversations yet</p>
@@ -815,7 +892,7 @@ const Chat = () => {
                             <div className="chat-header-info">
                                 <h4>{selectedUserName}</h4>
                                 <p className={onlineUsers.has(selectedUser.id) ? 'online' : 'offline'}>
-                                    {onlineUsers.has(selectedUser.id) ? 'Online' : 'Offline'}
+                                    {getLastActiveText(selectedUser.id)}
                                 </p>
                           </div>
                         </div>

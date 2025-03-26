@@ -17,75 +17,84 @@ export const addMessageController = async (req, res) => {
     if (req.user.role !== "seller" && req.user.role !== "buyer" && req.user.role !== "admin") {
       return res.status(401).json({
         success: false,
-        message: "Not authorized to create a Message",
+        message: "Not authorized to create a message"
       });
     }
 
     const { id } = req.params;
-    const messageData = {
-      senderId: req.user.id,
-      receiverId: id,
-      message: req.body.message,
-      replyTo: req.body.replyTo || null,
-      isRead: false
-    };
+    const { message, replyTo } = req.body;
 
-    if (!messageData.message) {
+    if (!message) {
       return res.status(400).json({
         success: false,
-        message: "Message is required",
+        message: "Message content is required"
       });
     }
 
+    const messageData = {
+      senderId: req.user.id,
+      receiverId: id,
+      message,
+      replyTo: replyTo || null,
+      isRead: false,
+      isDelivered: false
+    };
+
     const newMessage = await createMessage(messageData);
+
+    // Emit socket event for real-time updates
+    if (req.app.get('io')) {
+      req.app.get('io').to(`user_${id}`).emit('newMessage', newMessage);
+    }
 
     return res.status(201).json({
       success: true,
       message: "Message created successfully",
-      Message: newMessage,
+      Message: newMessage
     });
   } catch (error) {
     console.error('Error in addMessageController:', error);
     return res.status(500).json({
       success: false,
-      message: "Something went wrong",
-      error: error.message,
+      message: error.message || "Error creating message",
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
 
 export const MessageWithAllController = async (req, res) => {
   try {
-    // Assuming the logged-in user ID is stored in req.user.id
     const userId = req.user.id;
-    const { id } = req.params; // Get the other user's ID from the request parameters
+    const { id } = req.params;
 
-    // Ensure the other user ID is provided
     if (!id) {
       return res.status(400).json({
-        message: "Other user ID is required.",
+        success: false,
+        message: "Other user ID is required"
       });
     }
 
-    // Fetch messages between the logged-in user and the other user
-    let messages = await getAllMessages(userId, id);
+    const messages = await getAllMessages(userId, id);
 
     if (!messages || messages.length === 0) {
-      return res.status(404).json({
-        message: "No messages found between the users.",
+      return res.status(200).json({
+        success: true,
+        message: "No messages found between the users",
+        data: []
       });
     }
 
     return res.status(200).json({
       success: true,
       message: "Messages retrieved successfully",
-      data: messages,
+      data: messages
     });
   } catch (error) {
-    console.log(error);
+    console.error('Error fetching messages:', error);
     return res.status(500).json({
-      message: "Something went wrong",
-      error,
+      success: false,
+      message: error.message || "Error fetching messages",
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
@@ -281,8 +290,8 @@ export const getChatHistoryController = async (req, res) => {
     console.error('Error getting chat history:', error);
     return res.status(500).json({
       success: false,
-      message: "Error getting chat history",
-      error: error.message
+      message: error.message || "Error getting chat history",
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
